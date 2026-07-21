@@ -12,11 +12,22 @@ constexpr char VERSION[] = "2.0.0-alpha";
 constexpr size_t MAX_KEGS = 2;
 
 //=========================
-// HX711 #1
+// Konfigurasjon av vekter
 //=========================
 
-constexpr uint8_t HX711_DOUT = 32;
-constexpr uint8_t HX711_SCK  = 33;
+struct ScaleConfig
+{
+    bool enabled;
+    uint8_t doutPin;
+    uint8_t sckPin;
+};
+
+constexpr ScaleConfig SCALE_CONFIGS[MAX_KEGS] =
+{
+    // Aktiv, DOUT, SCK
+    { true,  32, 33 },   // Fat 1
+    { false, 25, 26 }    // Fat 2 (ikke tilkoblet enda)
+};
 
 //=========================
 // Standardverdier

@@ -1,76 +1,163 @@
 #include <Arduino.h>
-#include <HX711_ADC.h>
 
 #include "config.h"
-#include "settings.h"
 #include "weight.h"
 #include "kegmanager.h"
+#include "scale.h"
 
-HX711_ADC LoadCell(HX711_DOUT, HX711_SCK);
+// ============================================================
+// Vekter
+//
+// Hver Scale opprettes direkte fra SCALE_CONFIGS i config.h.
+// enabled + DOUT + SCK ligger dermed kun definert ett sted.
+// ============================================================
 
-static float filteredWeight = 0.0f;
+Scale scales[MAX_KEGS] =
+{
+    Scale(SCALE_CONFIGS[0]),
+    Scale(SCALE_CONFIGS[1])
+};
+
+
+// ============================================================
+// Oppstart
+// ============================================================
 
 void weightBegin()
 {
-    Serial.println("Starter HX711...");
+    Serial.println();
+    Serial.println("==========================");
+    Serial.println(" Starter vekter");
+    Serial.println("==========================");
 
-    LoadCell.begin();
-
-    bool tare = true;
-    LoadCell.start(2000, tare);
-
-    if (LoadCell.getTareTimeoutFlag())
+    for (size_t i = 0; i < MAX_KEGS; i++)
     {
-        Serial.println("HX711 Timeout!");
-        while (1);
+        Serial.print("Fat ");
+        Serial.print(i + 1);
+        Serial.print(" - ");
+
+        // Vekten er deaktivert i config.h
+        if (!SCALE_CONFIGS[i].enabled)
+        {
+            Serial.println("DEAKTIVERT");
+            continue;
+        }
+
+        // Aktiver Scale-objektet iht. config
+        scales[i].setEnabled(true);
+
+        // Start HX711 med kalibreringsfaktoren som tilhører fatet
+        if (scales[i].begin(kegs[i].getCalibration()))
+        {
+            Serial.print("OK");
+
+            Serial.print("  DOUT=");
+            Serial.print(SCALE_CONFIGS[i].doutPin);
+
+            Serial.print("  SCK=");
+            Serial.println(SCALE_CONFIGS[i].sckPin);
+        }
+        else
+        {
+            Serial.println("OFFLINE");
+        }
     }
 
-    LoadCell.setCalFactor(kegs[0].getCalibration());
-
-    Serial.println("HX711 klar.");
+    Serial.println("==========================");
+    Serial.println();
 }
+
+
+// ============================================================
+// Hovedloop for vektene
+// ============================================================
 
 void weightLoop()
 {
-    if (!LoadCell.update())
-        return;
+    // --------------------------------------------------------
+    // Oppdater alle aktive vekter
+    // --------------------------------------------------------
 
-    float raw = LoadCell.getData();
-
-    static bool firstSample = true;
-
-    if (firstSample)
+    for (size_t i = 0; i < MAX_KEGS; i++)
     {
-        filteredWeight = raw;
-        firstSample = false;
-    }
-    else
-    {
-        constexpr float alpha = 0.10f;
-        filteredWeight = filteredWeight * (1.0f - alpha) + raw * alpha;
+        if (!SCALE_CONFIGS[i].enabled)
+            continue;
+
+        if (!scales[i].isOnline())
+            continue;
+
+        scales[i].update();
+
+        // Oppdater Keg kun når HX711 faktisk har nye data
+        if (scales[i].hasNewData())
+        {
+            kegs[i].updateWeight(scales[i].getWeight());
+        }
     }
 
-    kegs[0].updateWeight(filteredWeight);
+
+    // --------------------------------------------------------
+    // Debug-utskrift én gang per sekund
+    // --------------------------------------------------------
 
     static unsigned long lastPrint = 0;
 
-    if (millis() - lastPrint >= 1000)
+    if (millis() - lastPrint < 1000)
+        return;
+
+    lastPrint = millis();
+
+    Serial.println("========== KEGS ==========");
+
+    for (size_t i = 0; i < MAX_KEGS; i++)
     {
-        lastPrint = millis();
+        Serial.print("Fat ");
+        Serial.print(i + 1);
 
-        Serial.print("RAW: ");
-        Serial.print(raw, 2);
+        Serial.print(" (");
+        Serial.print(kegs[i].getName());
+        Serial.print(")");
 
-        Serial.print("  Filter: ");
-        Serial.print(filteredWeight, 2);
+        // Deaktivert i config.h
+        if (!SCALE_CONFIGS[i].enabled)
+        {
+            Serial.println("  DEAKTIVERT");
+            continue;
+        }
 
-        Serial.print("  Liter: ");
-        Serial.print(kegs[0].getLiters(), 2);
+        // Aktivert, men HX711 kunne ikke startes
+        if (!scales[i].isOnline())
+        {
+            Serial.println("  OFFLINE");
+            continue;
+        }
 
-        Serial.print("  %: ");
-        Serial.println(kegs[0].getPercent(), 1);
+        Serial.print("  ");
+        Serial.print(kegs[i].getWeight(), 2);
+        Serial.print(" kg");
+
+        Serial.print("  ");
+
+        Serial.print(kegs[i].getLiters(), 2);
+        Serial.print(" L");
+
+        Serial.print("  ");
+
+        Serial.print(kegs[i].getPercent(), 1);
+        Serial.println(" %");
     }
+
+    Serial.println();
 }
+
+
+// ============================================================
+// Kompatibilitetsfunksjoner for Fat 1
+//
+// Disse beholdes foreløpig for eventuell eldre kode som fortsatt
+// bruker getWeight(), getBeerLiters() osv.
+// De kan fjernes senere når hele prosjektet bruker kegs[] direkte.
+// ============================================================
 
 float getWeight()
 {
@@ -90,4 +177,19 @@ float getBeerLiters()
 float getBeerPercent()
 {
     return kegs[0].getPercent();
+}
+bool isScaleEnabled(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return false;
+
+    return SCALE_CONFIGS[index].enabled;
+}
+
+bool isScaleOnline(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return false;
+
+    return scales[index].isOnline();
 }
