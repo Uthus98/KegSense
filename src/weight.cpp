@@ -1,17 +1,14 @@
 #include <Arduino.h>
 #include <HX711_ADC.h>
 
-#include "settings.h"
 #include "config.h"
+#include "settings.h"
 #include "weight.h"
 #include "kegmanager.h"
 
 HX711_ADC LoadCell(HX711_DOUT, HX711_SCK);
 
-float weight = 0.0;
-float beerWeight = 0.0;
-float beerLiters = 0.0;
-float beerPercent = 0.0;
+static float filteredWeight = 0.0f;
 
 void weightBegin()
 {
@@ -28,98 +25,69 @@ void weightBegin()
         while (1);
     }
 
-    LoadCell.setCalFactor(getCalFactor());
+    LoadCell.setCalFactor(kegs[0].getCalibration());
 
     Serial.println("HX711 klar.");
 }
 
 void weightLoop()
 {
-   if (LoadCell.update())
-{
+    if (!LoadCell.update())
+        return;
+
     float raw = LoadCell.getData();
 
     static bool firstSample = true;
 
     if (firstSample)
     {
-        weight = raw;
+        filteredWeight = raw;
         firstSample = false;
     }
     else
     {
-        const float alpha = 0.10f;
-        weight = weight * (1.0f - alpha) + raw * alpha;
-        kegs[0].weight = weight;
-
-kegs[0].beerWeight = weight - kegs[0].emptyWeight;
-
-if (kegs[0].beerWeight < 0)
-    kegs[0].beerWeight = 0;
-
-kegs[0].liters = kegs[0].beerWeight / BEER_DENSITY;
-
-kegs[0].percent =
-    (kegs[0].liters / kegs[0].volume) * 100.0;
-
-if (kegs[0].percent < 0)
-    kegs[0].percent = 0;
-
-if (kegs[0].percent > 100)
-    kegs[0].percent = 100;
-        beerWeight = weight - getKegEmpty();
-
-if (beerWeight < 0)
-    beerWeight = 0;
-
-beerLiters = beerWeight / BEER_DENSITY;
-
-beerPercent = (beerLiters / getKegVolume()) * 100.0f;
-
-if (beerPercent < 0)
-    beerPercent = 0;
-
-if (beerPercent > 100)
-    beerPercent = 100;
+        constexpr float alpha = 0.10f;
+        filteredWeight = filteredWeight * (1.0f - alpha) + raw * alpha;
     }
 
-        static unsigned long lastPrint = 0;
+    kegs[0].updateWeight(filteredWeight);
 
-        if (millis() - lastPrint > 1000)
-        {
-            lastPrint = millis();
+    static unsigned long lastPrint = 0;
 
-            Serial.print("RAW: ");
-            Serial.print(raw, 3);
+    if (millis() - lastPrint >= 1000)
+    {
+        lastPrint = millis();
 
-            Serial.print("   Filtrert: ");
-            Serial.print(weight, 3);
+        Serial.print("RAW: ");
+        Serial.print(raw, 2);
 
-            Serial.print(" kg   Liter: ");
-            Serial.print(getBeerLiters(), 2);
+        Serial.print("  Filter: ");
+        Serial.print(filteredWeight, 2);
 
-            Serial.print("   %: ");
-            Serial.println(getBeerPercent(), 1);
-        }
+        Serial.print("  Liter: ");
+        Serial.print(kegs[0].getLiters(), 2);
+
+        Serial.print("  %: ");
+        Serial.println(kegs[0].getPercent(), 1);
     }
 }
 
 float getWeight()
 {
-    return kegs[0].weight;
-}
-
-float getBeerLiters()
-{
-    return kegs[0].liters;
-}
-
-float getBeerPercent()
-{
-    return kegs[0].percent;
+    return kegs[0].getWeight();
 }
 
 float getBeerWeight()
 {
-    return kegs[0].beerWeight;
+    return kegs[0].getBeerWeight();
+}
+
+float getBeerLiters()
+{
+    return kegs[0].getLiters();
+}
+
+float getBeerPercent()
+{
+    return kegs[0].getPercent();
 }

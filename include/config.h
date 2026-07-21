@@ -1,32 +1,31 @@
 #pragma once
 
-#define DEVICE_NAME "KegSense"
-#define VERSION     "1.1.0"
+#include <Arduino.h>
+
+constexpr char DEVICE_NAME[] = "KegSense";
+constexpr char VERSION[] = "2.0.0-alpha";
 
 //=========================
-// HX711
+// Antall fat
+//=========================
+
+constexpr size_t MAX_KEGS = 2;
+
+//=========================
+// HX711 #1
 //=========================
 
 constexpr uint8_t HX711_DOUT = 32;
 constexpr uint8_t HX711_SCK  = 33;
 
 //=========================
-// Kalibrering
+// Standardverdier
 //=========================
 
-constexpr float CALIBRATION_FACTOR = 23786.25f;
+constexpr float DEFAULT_CALIBRATION = 23786.25f;
+constexpr float DEFAULT_KEG_EMPTY   = 4.90f;
+constexpr float DEFAULT_KEG_VOLUME  = 20.0f;
 
-//=========================
-// Fat
-//=========================
-
-// Tomvekt Corneliusfat
-constexpr float KEG_EMPTY = 4.90f;
-
-// Liter når fullt
-constexpr float KEG_VOLUME = 20.0f;
-
-// Tetthet øl
 constexpr float BEER_DENSITY = 0.997f;
 
 //=========================

@@ -4,18 +4,17 @@
 #include <ArduinoJson.h>
 
 #include "config.h"
-#include "weight.h"
-#include "settings.h"
 #include "web.h"
 #include "html.h"
+#include "kegmanager.h"
+#include "settings.h"
 
 AsyncWebServer server(80);
 
-void handleRoot(AsyncWebServerRequest *request);
-void handleApi(AsyncWebServerRequest *request);
-void handleSettings(AsyncWebServerRequest *request);
-void handleSave(AsyncWebServerRequest *request);
-void handleTare(AsyncWebServerRequest *request);
+static void handleRoot(AsyncWebServerRequest *request);
+static void handleApi(AsyncWebServerRequest *request);
+static void handleSettings(AsyncWebServerRequest *request);
+static void handleSave(AsyncWebServerRequest *request);
 
 void webBegin()
 {
@@ -32,14 +31,13 @@ void webBegin()
     }
 
     Serial.println();
-    Serial.print("IP-adresse: ");
+    Serial.print("IP: ");
     Serial.println(WiFi.localIP());
 
     server.on("/", HTTP_GET, handleRoot);
     server.on("/api", HTTP_GET, handleApi);
     server.on("/settings", HTTP_GET, handleSettings);
     server.on("/save", HTTP_GET, handleSave);
-    server.on("/tare", HTTP_GET, handleTare);
 
     server.begin();
 
@@ -48,122 +46,86 @@ void webBegin()
 
 void webLoop()
 {
-    // AsyncWebServer trenger ingenting her
 }
 
-void handleRoot(AsyncWebServerRequest *request)
+static void handleRoot(AsyncWebServerRequest *request)
 {
-    request->send_P(200, "text/html", MAIN_page);
+    request->send(200, "text/html", MAIN_page);
 }
 
-void handleApi(AsyncWebServerRequest *request)
+static void handleApi(AsyncWebServerRequest *request)
 {
     JsonDocument doc;
 
     doc["device"] = DEVICE_NAME;
     doc["version"] = VERSION;
 
-    doc["name"] = getKegName();
+    doc["name"] = kegs[0].getName();
 
-    doc["weight"] = getWeight();
-    doc["beerWeight"] = getBeerWeight();
-    doc["liter"] = getBeerLiters();
-    doc["percent"] = getBeerPercent();
+    doc["weight"] = kegs[0].getWeight();
+    doc["beerWeight"] = kegs[0].getBeerWeight();
+    doc["liter"] = kegs[0].getLiters();
+    doc["percent"] = kegs[0].getPercent();
 
-    doc["emptyWeight"] = getKegEmpty();
-    doc["kegVolume"] = getKegVolume();
+    doc["emptyWeight"] = kegs[0].getEmptyWeight();
+    doc["kegVolume"] = kegs[0].getVolume();
 
     doc["wifiRSSI"] = WiFi.RSSI();
     doc["uptime"] = millis() / 1000;
 
     String json;
-    serializeJsonPretty(doc, json);
+    serializeJson(doc, json);
 
     request->send(200, "application/json", json);
 }
 
-void handleSettings(AsyncWebServerRequest *request)
+static void handleSettings(AsyncWebServerRequest *request)
 {
     String html;
 
-    html += "<!DOCTYPE html><html><head>";
-    html += "<meta charset='UTF-8'>";
-    html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-
-    html += "<style>";
-    html += "body{background:#181818;color:white;font-family:Arial;text-align:center;}";
-    html += "input{font-size:22px;width:220px;padding:8px;margin:8px;}";
-    html += "button{font-size:22px;padding:10px 25px;margin:15px;}";
-    html += "a{color:#00d26a;font-size:22px;text-decoration:none;}";
-    html += "</style>";
-
-    html += "</head><body>";
-
-    html += "<h1>⚙️ KegSense</h1>";
+    html += "<html><body>";
+    html += "<h1>KegSense</h1>";
 
     html += "<form action='/save'>";
 
-    html += "<p>Fatnavn</p>";
-    html += "<input type='text' name='name' value='";
-    html += getKegName();
-    html += "'>";
+    html += "Navn:<br>";
+    html += "<input name='name' value='" + kegs[0].getName() + "'><br><br>";
 
-    html += "<p>Tomvekt (kg)</p>";
-    html += "<input type='number' step='0.01' name='empty' value='";
-    html += String(getKegEmpty(),2);
-    html += "'>";
+    html += "Tomvekt:<br>";
+    html += "<input name='empty' value='" + String(kegs[0].getEmptyWeight(),2) + "'><br><br>";
 
-    html += "<p>Fatvolum (L)</p>";
-    html += "<input type='number' step='0.1' name='volume' value='";
-    html += String(getKegVolume(),1);
-    html += "'>";
+    html += "Volum:<br>";
+    html += "<input name='volume' value='" + String(kegs[0].getVolume(),1) + "'><br><br>";
 
-    html += "<p>Kalibreringsfaktor</p>";
-    html += "<input type='number' step='0.01' name='cal' value='";
-    html += String(getCalFactor(),2);
-    html += "'>";
+    html += "Kalibrering:<br>";
+    html += "<input name='cal' value='" + String(kegs[0].getCalibration(),2) + "'><br><br>";
 
-    html += "<br><br>";
-
-    html += "<button type='submit'>💾 Lagre</button>";
+    html += "<input type='submit' value='Lagre'>";
 
     html += "</form>";
 
-    html += "<br>";
-
-    html += "<form action='/tare'>";
-    html += "<button type='submit'>⚖️ Sett nåværende vekt som tomt fat</button>";
-    html += "</form>";
-
-    html += "<br><br>";
-
-    html += "<a href='/'>⬅ Tilbake</a>";
+    html += "<br><a href='/'>Tilbake</a>";
 
     html += "</body></html>";
 
     request->send(200, "text/html", html);
 }
 
-void handleSave(AsyncWebServerRequest *request)
+static void handleSave(AsyncWebServerRequest *request)
 {
     if(request->hasParam("name"))
-        setKegName(request->getParam("name")->value());
+        kegs[0].setName(request->getParam("name")->value());
 
     if(request->hasParam("empty"))
-        setKegEmpty(request->getParam("empty")->value().toFloat());
+        kegs[0].setEmptyWeight(request->getParam("empty")->value().toFloat());
 
     if(request->hasParam("volume"))
-        setKegVolume(request->getParam("volume")->value().toFloat());
+        kegs[0].setVolume(request->getParam("volume")->value().toFloat());
 
     if(request->hasParam("cal"))
-        setCalFactor(request->getParam("cal")->value().toFloat());
+        kegs[0].setCalibration(request->getParam("cal")->value().toFloat());
 
-    request->redirect("/settings");
-}
-
-void handleTare(AsyncWebServerRequest *request)
-{
-    setKegEmpty(getWeight());
+    saveKegSettings(0);
 
     request->redirect("/settings");
 }
