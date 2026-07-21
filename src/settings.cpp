@@ -1,64 +1,51 @@
 #include <Preferences.h>
+
 #include "settings.h"
+#include "kegmanager.h"
 
 Preferences prefs;
 
-// Standardverdier
-String kegName = "Mitt fat";
-float kegEmpty = 4.90;
-float kegVolume = 20.0;
-float calFactor = 23786.25;
+void loadKegSettings(int index)
+{
+    String prefix = "keg" + String(index) + "_";
+
+    kegs[index].setName(
+        prefs.getString((prefix + "name").c_str(),
+                        ("Fat " + String(index + 1)).c_str()));
+
+    kegs[index].setEmptyWeight(
+        prefs.getFloat((prefix + "empty").c_str(), 4.90));
+
+    kegs[index].setVolume(
+        prefs.getFloat((prefix + "volume").c_str(), 20.0));
+
+    kegs[index].setCalibration(
+        prefs.getFloat((prefix + "cal").c_str(), 23786.25));
+}
+
+void saveKegSettings(int index)
+{
+    String prefix = "keg" + String(index) + "_";
+
+    prefs.putString((prefix + "name").c_str(),
+                    kegs[index].getName());
+
+    prefs.putFloat((prefix + "empty").c_str(),
+                   kegs[index].getEmptyWeight());
+
+    prefs.putFloat((prefix + "volume").c_str(),
+                   kegs[index].getVolume());
+
+    prefs.putFloat((prefix + "cal").c_str(),
+                   kegs[index].getCalibration());
+}
 
 void settingsBegin()
 {
     prefs.begin("kegsense", false);
 
-    kegName   = prefs.getString("kegName", "Mitt fat");
-    kegEmpty  = prefs.getFloat("empty", 4.90);
-    kegVolume = prefs.getFloat("volume", 20.0);
-    calFactor = prefs.getFloat("cal", 23786.25);
-}
-
-String getKegName()
-{
-    return kegName;
-}
-
-float getKegEmpty()
-{
-    return kegEmpty;
-}
-
-float getKegVolume()
-{
-    return kegVolume;
-}
-
-float getCalFactor()
-{
-    return calFactor;
-}
-
-void setKegName(String name)
-{
-    kegName = name;
-    prefs.putString("kegName", name);
-}
-
-void setKegEmpty(float value)
-{
-    kegEmpty = value;
-    prefs.putFloat("empty", value);
-}
-
-void setKegVolume(float value)
-{
-    kegVolume = value;
-    prefs.putFloat("volume", value);
-}
-
-void setCalFactor(float value)
-{
-    calFactor = value;
-    prefs.putFloat("cal", value);
+    for (int i = 0; i < MAX_KEGS; i++)
+    {
+        loadKegSettings(i);
+    }
 }

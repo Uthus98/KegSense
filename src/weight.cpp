@@ -4,6 +4,7 @@
 #include "settings.h"
 #include "config.h"
 #include "weight.h"
+#include "kegmanager.h"
 
 HX711_ADC LoadCell(HX711_DOUT, HX711_SCK);
 
@@ -49,6 +50,23 @@ void weightLoop()
     {
         const float alpha = 0.10f;
         weight = weight * (1.0f - alpha) + raw * alpha;
+        kegs[0].weight = weight;
+
+kegs[0].beerWeight = weight - kegs[0].emptyWeight;
+
+if (kegs[0].beerWeight < 0)
+    kegs[0].beerWeight = 0;
+
+kegs[0].liters = kegs[0].beerWeight / BEER_DENSITY;
+
+kegs[0].percent =
+    (kegs[0].liters / kegs[0].volume) * 100.0;
+
+if (kegs[0].percent < 0)
+    kegs[0].percent = 0;
+
+if (kegs[0].percent > 100)
+    kegs[0].percent = 100;
         beerWeight = weight - getKegEmpty();
 
 if (beerWeight < 0)
@@ -88,20 +106,20 @@ if (beerPercent > 100)
 
 float getWeight()
 {
-    return weight;
+    return kegs[0].weight;
 }
 
 float getBeerLiters()
 {
-    return beerLiters;
+    return kegs[0].liters;
 }
 
 float getBeerPercent()
 {
-    return beerPercent;
+    return kegs[0].percent;
 }
 
 float getBeerWeight()
 {
-    return beerWeight;
+    return kegs[0].beerWeight;
 }

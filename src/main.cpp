@@ -2,6 +2,7 @@
 #include "settings.h"
 #include "weight.h"
 #include "web.h"
+#include "kegmanager.h"
 
 void setup()
 {
@@ -14,6 +15,7 @@ void setup()
     Serial.println("----------------------");
     
     settingsBegin();
+    kegManagerBegin();
     weightBegin();
     webBegin();
 }
