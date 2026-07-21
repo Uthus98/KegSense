@@ -11,11 +11,11 @@ void setup()
 
     Serial.println();
     Serial.println("----------------------");
-    Serial.println(" KegSense v1.0");
+    Serial.println(" KegSense v2.0");
     Serial.println("----------------------");
-    
-    settingsBegin();
+
     kegManagerBegin();
+    settingsBegin();
     weightBegin();
     webBegin();
 }

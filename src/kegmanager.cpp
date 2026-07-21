@@ -4,6 +4,7 @@ Keg kegs[MAX_KEGS];
 
 void kegManagerBegin()
 {
-    kegs[0].setName("Fat 1");
-    kegs[1].setName("Fat 2");
+    // Foreløpig ingen initialisering nødvendig her.
+    // Standardverdier settes i Keg-konstruktøren,
+    // og lagrede innstillinger lastes av settingsBegin().
 }
