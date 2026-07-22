@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <Update.h>
 
 #include "config.h"
 #include "web.h"
@@ -21,10 +22,18 @@ static void handleSave(AsyncWebServerRequest *request);
 static String escapeHtml(const String& value);
 static void handleNewKeg(AsyncWebServerRequest *request);
 static void handleNewKegSave(AsyncWebServerRequest *request);
+static void handleUpdatePage(AsyncWebServerRequest *request);
+static void handleUpdateComplete(AsyncWebServerRequest *request);
+static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
+                               size_t index, uint8_t *data, size_t len, bool final);
 static void handleCalibrationStatus(AsyncWebServerRequest *request);
 static void handleCalibrationTare(AsyncWebServerRequest *request);
 static void handleCalibrationApply(AsyncWebServerRequest *request);
 static void handleCalibrationClear(AsyncWebServerRequest *request);
+
+static bool restartAfterUpdate = false;
+static uint32_t restartRequestedAt = 0;
+static bool updateFileAccepted = false;
 
 void webBegin()
 {
@@ -62,6 +71,8 @@ void webBegin()
     server.on("/save", HTTP_GET, handleSave);
     server.on("/new-keg", HTTP_GET, handleNewKeg);
     server.on("/new-keg/save", HTTP_POST, handleNewKegSave);
+    server.on("/update", HTTP_GET, handleUpdatePage);
+    server.on("/update", HTTP_POST, handleUpdateComplete, handleUpdateUpload);
     // Ikke legg status under /api. Enkelte ESPAsyncWebServer-versjoner
     // lar den eksisterende /api-ruten fange opp /api/calibration.
     server.on("/calibration/status", HTTP_GET, handleCalibrationStatus);
@@ -76,7 +87,8 @@ void webBegin()
 
 void webLoop()
 {
-    // AsyncWebServer krever ingen behandling her.
+    if (restartAfterUpdate && millis() - restartRequestedAt >= 1200)
+        ESP.restart();
 }
 
 static String escapeHtml(const String& value)
@@ -418,6 +430,7 @@ refreshCalibration();
 </script>
 )rawliteral";
 
+    html += "<a href='/update'>Oppdater firmware</a>";
     html += "<a href='/'>⬅ Tilbake til dashboard</a>";
 
     html += "</div>";
@@ -479,6 +492,121 @@ static void handleSave(AsyncWebServerRequest *request)
     }
 
     request->redirect("/settings");
+}
+
+// ============================================================
+// OTA-oppdatering fra nettleser
+// ============================================================
+
+static bool authenticateUpdate(AsyncWebServerRequest *request)
+{
+    if (request->authenticate(OTA_USERNAME, OTA_PASSWORD))
+        return true;
+
+    request->requestAuthentication();
+    return false;
+}
+
+static void handleUpdatePage(AsyncWebServerRequest *request)
+{
+    if (!authenticateUpdate(request))
+        return;
+
+    static const char page[] PROGMEM = R"rawliteral(
+<!doctype html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KegSense - Oppdatering</title><style>
+body{margin:0;background:#181818;color:#fff;font-family:Arial,sans-serif}
+.box{max-width:560px;margin:auto;padding:24px}.card{background:#252525;border-radius:18px;padding:22px}
+input{display:block;width:100%;box-sizing:border-box;margin:20px 0;padding:12px;background:#333;color:#fff;border:1px solid #555;border-radius:9px}
+button,a{display:block;width:100%;box-sizing:border-box;padding:14px;border:0;border-radius:10px;text-align:center;font-size:18px;font-weight:bold;text-decoration:none}
+button{background:#00d26a;color:#fff}a{margin-top:15px;background:#444;color:#fff}
+progress{width:100%;height:24px;margin-top:20px}.note{color:#bbb;line-height:1.5}#status{margin-top:15px}
+</style></head><body><main class="box"><h1>Oppdater KegSense</h1><div class="card">
+<p class="note">Velg bare en firmwarefil med endelsen <strong>.bin</strong>. Ikke koble fra strømmen under oppdateringen.</p>
+<input id="file" type="file" accept=".bin,application/octet-stream">
+<button onclick="upload()">Last opp og installer</button>
+<progress id="progress" value="0" max="100"></progress><div id="status"></div>
+<a href="/settings">Avbryt</a></div></main><script>
+function upload(){
+ const file=document.getElementById('file').files[0], status=document.getElementById('status');
+ if(!file){status.textContent='Velg en .bin-fil først.';return;}
+ if(!file.name.toLowerCase().endsWith('.bin')){status.textContent='Filen må ende med .bin.';return;}
+ if(!confirm('Installere '+file.name+'?'))return;
+ const data=new FormData();data.append('firmware',file);
+ const xhr=new XMLHttpRequest();xhr.open('POST','/update');
+ xhr.upload.onprogress=e=>{if(e.lengthComputable)document.getElementById('progress').value=(e.loaded/e.total)*100;};
+ xhr.onload=()=>{status.textContent=xhr.responseText;};
+ xhr.onerror=()=>{status.textContent='Nettverksfeil under opplasting.';};
+ status.textContent='Laster opp...';xhr.send(data);
+}
+</script></body></html>
+)rawliteral";
+
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html; charset=utf-8", page);
+    response->addHeader("Cache-Control", "no-store");
+    request->send(response);
+}
+
+static void handleUpdateComplete(AsyncWebServerRequest *request)
+{
+    if (!authenticateUpdate(request))
+        return;
+
+    if (!updateFileAccepted || Update.hasError())
+    {
+        updateFileAccepted = false;
+        return request->send(400, "text/plain; charset=utf-8",
+                             "Oppdateringen feilet. ESP32 starter ikke på nytt.");
+    }
+
+    request->send(200, "text/plain; charset=utf-8",
+                  "Oppdatering fullført. KegSense starter på nytt...");
+    restartAfterUpdate = true;
+    restartRequestedAt = millis();
+    updateFileAccepted = false;
+}
+
+static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
+                               size_t index, uint8_t *data, size_t len, bool final)
+{
+    if (!request->authenticate(OTA_USERNAME, OTA_PASSWORD))
+        return;
+
+    if (index == 0)
+    {
+        updateFileAccepted = filename.endsWith(".bin") || filename.endsWith(".BIN");
+
+        if (!updateFileAccepted || !Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH))
+        {
+            updateFileAccepted = false;
+            Update.printError(Serial);
+            return;
+        }
+
+        Serial.print("OTA starter: ");
+        Serial.println(filename);
+    }
+
+    if (updateFileAccepted && len > 0 && Update.write(data, len) != len)
+    {
+        updateFileAccepted = false;
+        Update.printError(Serial);
+        return;
+    }
+
+    if (final && updateFileAccepted)
+    {
+        if (!Update.end(true))
+        {
+            updateFileAccepted = false;
+            Update.printError(Serial);
+        }
+        else
+        {
+            Serial.printf("OTA ferdig: %u bytes\n", static_cast<unsigned>(index + len));
+        }
+    }
 }
 
 // ============================================================

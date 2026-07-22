@@ -45,3 +45,11 @@ constexpr float BEER_DENSITY = 0.997f;
 
 constexpr char WIFI_SSID[] = "Marstadvegen 36";
 constexpr char WIFI_PASSWORD[] = "juli2022";
+
+//=========================
+// OTA-oppdatering
+//=========================
+
+// Endre disse før systemet tas i permanent bruk.
+constexpr char OTA_USERNAME[] = "admin";
+constexpr char OTA_PASSWORD[] = "kegsense";
