@@ -3,6 +3,7 @@
 #include "weight.h"
 #include "web.h"
 #include "kegmanager.h"
+#include "history.h"
 
 void setup()
 {
@@ -18,11 +19,13 @@ void setup()
     settingsBegin();
     weightBegin();
     webBegin();
+    historyBegin();
 }
 
 void loop()
 {
     weightLoop();
+    historyLoop();
     webLoop();
 
     delay(20);

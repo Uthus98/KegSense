@@ -406,6 +406,19 @@ function buildKegCard(keg)
             <div class="row">
 
                 <div class="label">
+                    Forbruk i dag
+                </div>
+
+                <div class="value">
+                    ${keg.consumptionToday.toFixed(2)} L
+                </div>
+
+            </div>
+
+
+            <div class="row">
+
+                <div class="label">
                     Fatvolum
                 </div>
 

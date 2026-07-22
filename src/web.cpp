@@ -10,6 +10,7 @@
 #include "kegmanager.h"
 #include "settings.h"
 #include "weight.h"
+#include "history.h"
 
 AsyncWebServer server(80);
 
@@ -122,6 +123,7 @@ static void handleApi(AsyncWebServerRequest *request)
     doc["version"] = VERSION;
     doc["wifiRSSI"] = WiFi.RSSI();
     doc["uptime"] = millis() / 1000;
+    doc["timeReady"] = isHistoryTimeReady();
 
     JsonArray kegArray = doc["kegs"].to<JsonArray>();
 
@@ -143,6 +145,7 @@ static void handleApi(AsyncWebServerRequest *request)
         keg["emptyWeight"] = kegs[i].getEmptyWeight();
         keg["volume"] = kegs[i].getVolume();
         keg["calibration"] = kegs[i].getCalibration();
+        keg["consumptionToday"] = getConsumptionToday(i);
     }
 
     String json;
@@ -566,6 +569,7 @@ static void handleNewKegSave(AsyncWebServerRequest *request)
     kegs[index].setVolume(volume);
     kegs[index].updateWeight(kegs[index].getWeight());
     saveKegSettings(static_cast<int>(index));
+    historyResetKeg(index);
 
     request->redirect("/");
 }
