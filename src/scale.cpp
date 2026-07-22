@@ -11,7 +11,7 @@ Scale::Scale(const ScaleConfig& config)
     _enabled = config.enabled;
 }
 
-bool Scale::begin(float calibration)
+bool Scale::begin(float calibration, long tareOffset, bool hasTareOffset)
 {
     if (!_enabled)
     {
@@ -21,8 +21,9 @@ bool Scale::begin(float calibration)
 
     _cell.begin();
 
-    bool tare = true;
-    _cell.start(2000, tare);
+    // Nullpunkt skal aldri beregnes automatisk ved oppstart. Et fat kan
+    // stå på vekten under strømbrudd eller OTA-oppdatering.
+    _cell.start(2000, false);
 
     if (_cell.getTareTimeoutFlag())
     {
@@ -31,6 +32,9 @@ bool Scale::begin(float calibration)
     }
 
     _cell.setCalFactor(calibration);
+
+    if (hasTareOffset)
+        _cell.setTareOffset(tareOffset);
 
     _online = true;
     _firstSample = true;
@@ -176,6 +180,11 @@ Scale::CalibrationState Scale::getCalibrationState() const
 float Scale::getCalibrationResult() const
 {
     return _calibrationResult;
+}
+
+long Scale::getTareOffset()
+{
+    return _cell.getTareOffset();
 }
 
 void Scale::clearCalibrationState()

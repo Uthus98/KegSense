@@ -22,7 +22,7 @@ public:
     Scale(const ScaleConfig& config);
 
     // Oppstart
-    bool begin(float calibration);
+    bool begin(float calibration, long tareOffset, bool hasTareOffset);
 
     // Oppdater måling
     void update();
@@ -34,6 +34,7 @@ public:
     bool startCalibration(float knownMass);
     CalibrationState getCalibrationState() const;
     float getCalibrationResult() const;
+    long getTareOffset();
     void clearCalibrationState();
 
     // Aktiv / deaktivert

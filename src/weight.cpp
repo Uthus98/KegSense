@@ -19,6 +19,8 @@ Scale scales[MAX_KEGS] =
     Scale(SCALE_CONFIGS[1])
 };
 
+static bool tareOffsetPendingSave[MAX_KEGS] = {false};
+
 
 // ============================================================
 // Oppstart
@@ -48,7 +50,10 @@ void weightBegin()
         scales[i].setEnabled(true);
 
         // Start HX711 med kalibreringsfaktoren som tilhører fatet
-        if (scales[i].begin(kegs[i].getCalibration()))
+        const bool hasOffset = hasScaleTareOffset(static_cast<int>(i));
+        const long tareOffset = loadScaleTareOffset(static_cast<int>(i));
+
+        if (scales[i].begin(kegs[i].getCalibration(), tareOffset, hasOffset))
         {
             Serial.print("OK");
 
@@ -56,7 +61,12 @@ void weightBegin()
             Serial.print(SCALE_CONFIGS[i].doutPin);
 
             Serial.print("  SCK=");
-            Serial.println(SCALE_CONFIGS[i].sckPin);
+            Serial.print(SCALE_CONFIGS[i].sckPin);
+
+            if (!hasOffset)
+                Serial.print("  NULLPUNKT MANGLER");
+
+            Serial.println();
         }
         else
         {
@@ -104,6 +114,14 @@ void weightLoop()
                 kegs[i].setCalibration(calibration);
                 saveKegSettings(static_cast<int>(i));
             }
+        }
+
+        if (tareOffsetPendingSave[i] &&
+            scales[i].getCalibrationState() == Scale::CalibrationState::ReadyForMass)
+        {
+            saveScaleTareOffset(static_cast<int>(i), scales[i].getTareOffset());
+            tareOffsetPendingSave[i] = false;
+            Serial.printf("Nullpunkt lagret for Fat %u\n", static_cast<unsigned>(i + 1));
         }
     }
 
@@ -208,7 +226,11 @@ bool isScaleOnline(size_t index)
 
 bool startScaleCalibrationTare(size_t index)
 {
-    return index < MAX_KEGS && scales[index].startCalibrationTare();
+    if (index >= MAX_KEGS || !scales[index].startCalibrationTare())
+        return false;
+
+    tareOffsetPendingSave[index] = true;
+    return true;
 }
 
 bool startScaleCalibration(size_t index, float knownMass)

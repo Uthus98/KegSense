@@ -419,6 +419,19 @@ function buildKegCard(keg)
             <div class="row">
 
                 <div class="label">
+                    Halvlitere igjen
+                </div>
+
+                <div class="value">
+                    ${keg.halfLiters}
+                </div>
+
+            </div>
+
+
+            <div class="row">
+
+                <div class="label">
                     Fatvolum
                 </div>
 

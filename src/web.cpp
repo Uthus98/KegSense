@@ -26,6 +26,7 @@ static void handleUpdatePage(AsyncWebServerRequest *request);
 static void handleUpdateComplete(AsyncWebServerRequest *request);
 static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
                                size_t index, uint8_t *data, size_t len, bool final);
+static void handleRestart(AsyncWebServerRequest *request);
 static void handleCalibrationStatus(AsyncWebServerRequest *request);
 static void handleCalibrationTare(AsyncWebServerRequest *request);
 static void handleCalibrationApply(AsyncWebServerRequest *request);
@@ -73,6 +74,7 @@ void webBegin()
     server.on("/new-keg/save", HTTP_POST, handleNewKegSave);
     server.on("/update", HTTP_GET, handleUpdatePage);
     server.on("/update", HTTP_POST, handleUpdateComplete, handleUpdateUpload);
+    server.on("/restart", HTTP_POST, handleRestart);
     // Ikke legg status under /api. Enkelte ESPAsyncWebServer-versjoner
     // lar den eksisterende /api-ruten fange opp /api/calibration.
     server.on("/calibration/status", HTTP_GET, handleCalibrationStatus);
@@ -153,6 +155,7 @@ static void handleApi(AsyncWebServerRequest *request)
         keg["beerWeight"] = kegs[i].getBeerWeight();
         keg["liter"] = kegs[i].getLiters();
         keg["percent"] = kegs[i].getPercent();
+        keg["halfLiters"] = static_cast<int>(kegs[i].getLiters() / 0.5f);
 
         keg["emptyWeight"] = kegs[i].getEmptyWeight();
         keg["volume"] = kegs[i].getVolume();
@@ -425,11 +428,41 @@ async function refreshCalibration() {
   }
 }
 
+async function restartDevice() {
+  if (!confirm('Starte KegSense på nytt?')) return;
+
+  try {
+    const response = await fetch('/restart', {method:'POST'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    document.querySelectorAll('[id^="cal-status-"]').forEach(el => {
+      el.textContent = 'KegSense starter på nytt...';
+    });
+
+    setTimeout(waitForDevice, 2500);
+  } catch (error) {
+    alert('Kunne ikke starte på nytt: ' + error.message);
+  }
+}
+
+async function waitForDevice() {
+  try {
+    const response = await fetch('/?_=' + Date.now(), {cache:'no-store'});
+    if (response.ok) {
+      location.replace('/');
+      return;
+    }
+  } catch (_) {}
+
+  setTimeout(waitForDevice, 1000);
+}
+
 setInterval(refreshCalibration, 700);
 refreshCalibration();
 </script>
 )rawliteral";
 
+    html += "<button type='button' style='background:#d35454' onclick='restartDevice()'>Start KegSense på nytt</button>";
     html += "<a href='/update'>Oppdater firmware</a>";
     html += "<a href='/'>⬅ Tilbake til dashboard</a>";
 
@@ -498,6 +531,13 @@ static void handleSave(AsyncWebServerRequest *request)
 // OTA-oppdatering fra nettleser
 // ============================================================
 
+static void handleRestart(AsyncWebServerRequest *request)
+{
+    request->send(200, "text/plain; charset=utf-8", "KegSense starter på nytt");
+    restartAfterUpdate = true;
+    restartRequestedAt = millis();
+}
+
 static bool authenticateUpdate(AsyncWebServerRequest *request)
 {
     if (request->authenticate(OTA_USERNAME, OTA_PASSWORD))
@@ -536,9 +576,21 @@ function upload(){
  const data=new FormData();data.append('firmware',file);
  const xhr=new XMLHttpRequest();xhr.open('POST','/update');
  xhr.upload.onprogress=e=>{if(e.lengthComputable)document.getElementById('progress').value=(e.loaded/e.total)*100;};
- xhr.onload=()=>{status.textContent=xhr.responseText;};
+ xhr.onload=()=>{
+   status.textContent=xhr.responseText;
+   if(xhr.status===200)setTimeout(waitForRestart,2500);
+ };
  xhr.onerror=()=>{status.textContent='Nettverksfeil under opplasting.';};
  status.textContent='Laster opp...';xhr.send(data);
+}
+async function waitForRestart(){
+ const status=document.getElementById('status');
+ status.textContent='Venter på at KegSense skal starte...';
+ try{
+   const response=await fetch('/?_='+Date.now(),{cache:'no-store'});
+   if(response.ok){location.replace('/');return;}
+ }catch(error){}
+ setTimeout(waitForRestart,1000);
 }
 </script></body></html>
 )rawliteral";
