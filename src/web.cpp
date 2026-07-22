@@ -6,6 +6,7 @@
 #include "config.h"
 #include "web.h"
 #include "html.h"
+#include "icons.h"
 #include "kegmanager.h"
 #include "settings.h"
 #include "weight.h"
@@ -16,6 +17,10 @@ static void handleRoot(AsyncWebServerRequest *request);
 static void handleApi(AsyncWebServerRequest *request);
 static void handleSettings(AsyncWebServerRequest *request);
 static void handleSave(AsyncWebServerRequest *request);
+static void handleCalibrationStatus(AsyncWebServerRequest *request);
+static void handleCalibrationTare(AsyncWebServerRequest *request);
+static void handleCalibrationApply(AsyncWebServerRequest *request);
+static void handleCalibrationClear(AsyncWebServerRequest *request);
 
 void webBegin()
 {
@@ -36,9 +41,27 @@ void webBegin()
     Serial.println(WiFi.localIP());
 
     server.on("/", HTTP_GET, handleRoot);
+    server.on("/apple-touch-icon.png", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+        request->send(200, "image/png", APPLE_TOUCH_ICON_180, APPLE_TOUCH_ICON_180_LEN);
+    });
+    server.on("/apple-touch-icon-152.png", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+        request->send(200, "image/png", APPLE_TOUCH_ICON_152, APPLE_TOUCH_ICON_152_LEN);
+    });
+    server.on("/apple-touch-icon-120.png", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+        request->send(200, "image/png", APPLE_TOUCH_ICON_120, APPLE_TOUCH_ICON_120_LEN);
+    });
     server.on("/api", HTTP_GET, handleApi);
     server.on("/settings", HTTP_GET, handleSettings);
     server.on("/save", HTTP_GET, handleSave);
+    // Ikke legg status under /api. Enkelte ESPAsyncWebServer-versjoner
+    // lar den eksisterende /api-ruten fange opp /api/calibration.
+    server.on("/calibration/status", HTTP_GET, handleCalibrationStatus);
+    server.on("/api/calibration/tare", HTTP_POST, handleCalibrationTare);
+    server.on("/api/calibration/apply", HTTP_POST, handleCalibrationApply);
+    server.on("/api/calibration/clear", HTTP_POST, handleCalibrationClear);
 
     server.begin();
 
@@ -267,12 +290,104 @@ static void handleSettings(AsyncWebServerRequest *request)
         html += String(kegs[i].getCalibration(), 2);
         html += "'>";
 
+        if (enabled)
+        {
+            html += "<div class='calibration' data-index='";
+            html += String(i);
+            html += "'>";
+            html += "<button type='button' onclick='startTare(";
+            html += String(i);
+            html += ")'>1. Nullstill tom plattform</button>";
+            html += "<label>Kjent testvekt (kg)</label>";
+            html += "<input type='number' min='0.01' step='0.001' id='known-";
+            html += String(i);
+            html += "' placeholder='For eksempel 2.677'>";
+            html += "<button type='button' onclick='applyCalibration(";
+            html += String(i);
+            html += ")'>2. Kalibrer med testvekten</button>";
+            html += "<div class='status' id='cal-status-";
+            html += String(i);
+            html += "'>Kalibrering ikke startet</div>";
+            html += "</div>";
+        }
+
         html += "</div>";
     }
 
     html += "<button type='submit'>💾 Lagre innstillinger</button>";
 
     html += "</form>";
+
+    html += R"rawliteral(
+<script>
+async function post(url, values) {
+  const body = new URLSearchParams(values || {});
+  const response = await fetch(url, {method:'POST', body});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Ukjent feil');
+  return data;
+}
+
+async function startTare(index) {
+  try {
+    await post('/api/calibration/tare', {index});
+    document.getElementById('cal-status-' + index).textContent =
+      'Nullstiller. Hold plattformen helt tom...';
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function applyCalibration(index) {
+  const mass = document.getElementById('known-' + index).value;
+  try {
+    await post('/api/calibration/apply', {index, mass});
+    document.getElementById('cal-status-' + index).textContent =
+      'Måler testvekten...';
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function refreshCalibration() {
+  try {
+    const response = await fetch(
+      '/calibration/status?_=' + Date.now(),
+      {cache: 'no-store'}
+    );
+
+    if (!response.ok)
+      throw new Error('HTTP ' + response.status);
+
+    const data = await response.json();
+
+    if (!data || !Array.isArray(data.scales))
+      throw new Error('ugyldig svar fra ESP32');
+
+    data.scales.forEach(scale => {
+      const el = document.getElementById('cal-status-' + scale.index);
+      if (!el) return;
+      const messages = {
+        idle: 'Kalibrering ikke startet',
+        taring: 'Nullstiller. Hold plattformen tom...',
+        ready: 'Klar: legg på kjent vekt, skriv vekten og trykk steg 2.',
+        measuring: 'Måler testvekten...',
+        success: 'Ferdig. Ny faktor er lagret: ' + scale.result.toFixed(2),
+        error: 'Kalibrering feilet. Prøv på nytt.'
+      };
+      el.textContent = messages[scale.state] || scale.state;
+    });
+  } catch (error) {
+    document.querySelectorAll('[id^="cal-status-"]').forEach(el => {
+      el.textContent = 'Kunne ikke hente kalibreringsstatus: ' + error.message;
+    });
+  }
+}
+
+setInterval(refreshCalibration, 700);
+refreshCalibration();
+</script>
+)rawliteral";
 
     html += "<a href='/'>⬅ Tilbake til dashboard</a>";
 
@@ -323,13 +438,105 @@ static void handleSave(AsyncWebServerRequest *request)
 
         if (request->hasParam(calKey))
         {
-            kegs[i].setCalibration(
-                request->getParam(calKey)->value().toFloat()
-            );
+            const float calibration = request->getParam(calKey)->value().toFloat();
+            if (calibration != 0.0f)
+            {
+                kegs[i].setCalibration(calibration);
+                setScaleCalibration(i, calibration);
+            }
         }
 
         saveKegSettings(i);
     }
 
     request->redirect("/settings");
+}
+
+static bool readScaleIndex(AsyncWebServerRequest *request, size_t &index)
+{
+    if (!request->hasParam("index", true))
+        return false;
+
+    const int parsed = request->getParam("index", true)->value().toInt();
+    if (parsed < 0 || parsed >= static_cast<int>(MAX_KEGS))
+        return false;
+
+    index = static_cast<size_t>(parsed);
+    return true;
+}
+
+static void sendCalibrationError(AsyncWebServerRequest *request, int code, const char *message)
+{
+    JsonDocument doc;
+    doc["message"] = message;
+    String json;
+    serializeJson(doc, json);
+    request->send(code, "application/json", json);
+}
+
+static void handleCalibrationStatus(AsyncWebServerRequest *request)
+{
+    JsonDocument doc;
+    JsonArray scales = doc["scales"].to<JsonArray>();
+
+    for (size_t i = 0; i < MAX_KEGS; i++)
+    {
+        JsonObject scale = scales.add<JsonObject>();
+        scale["index"] = i;
+        scale["enabled"] = isScaleEnabled(i);
+        scale["online"] = isScaleOnline(i);
+        scale["state"] = getScaleCalibrationState(i);
+        scale["result"] = getScaleCalibrationResult(i);
+    }
+
+    String json;
+    serializeJson(doc, json);
+
+    AsyncWebServerResponse *response =
+        request->beginResponse(200, "application/json", json);
+
+    response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    response->addHeader("Pragma", "no-cache");
+    response->addHeader("Expires", "0");
+
+    request->send(response);
+}
+
+static void handleCalibrationTare(AsyncWebServerRequest *request)
+{
+    size_t index;
+    if (!readScaleIndex(request, index))
+        return sendCalibrationError(request, 400, "Ugyldig fatnummer");
+
+    clearScaleCalibrationState(index);
+    if (!startScaleCalibrationTare(index))
+        return sendCalibrationError(request, 409, "Vekten er deaktivert eller offline");
+
+    request->send(202, "application/json", "{\"message\":\"Tare startet\"}");
+}
+
+static void handleCalibrationApply(AsyncWebServerRequest *request)
+{
+    size_t index;
+    if (!readScaleIndex(request, index) || !request->hasParam("mass", true))
+        return sendCalibrationError(request, 400, "Mangler fatnummer eller kjent vekt");
+
+    const float mass = request->getParam("mass", true)->value().toFloat();
+    if (mass <= 0.0f)
+        return sendCalibrationError(request, 400, "Kjent vekt må være større enn null");
+
+    if (!startScaleCalibration(index, mass))
+        return sendCalibrationError(request, 409, "Fullfør nullstilling før kalibrering");
+
+    request->send(202, "application/json", "{\"message\":\"Kalibrering startet\"}");
+}
+
+static void handleCalibrationClear(AsyncWebServerRequest *request)
+{
+    size_t index;
+    if (!readScaleIndex(request, index))
+        return sendCalibrationError(request, 400, "Ugyldig fatnummer");
+
+    clearScaleCalibrationState(index);
+    request->send(200, "application/json", "{\"message\":\"Status nullstilt\"}");
 }

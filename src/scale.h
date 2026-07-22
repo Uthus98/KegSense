@@ -8,6 +8,16 @@
 class Scale
 {
 public:
+    enum class CalibrationState : uint8_t
+    {
+        Idle,
+        Taring,
+        ReadyForMass,
+        Measuring,
+        Success,
+        Error
+    };
+
     Scale(uint8_t doutPin, uint8_t sckPin);
     Scale(const ScaleConfig& config);
 
@@ -20,6 +30,11 @@ public:
     // Tare / kalibrering
     void tare();
     void setCalibration(float calibration);
+    bool startCalibrationTare();
+    bool startCalibration(float knownMass);
+    CalibrationState getCalibrationState() const;
+    float getCalibrationResult() const;
+    void clearCalibrationState();
 
     // Aktiv / deaktivert
     void setEnabled(bool enabled);
@@ -41,4 +56,8 @@ private:
 
     float _filteredWeight = 0.0f;
     bool _firstSample = true;
+
+    CalibrationState _calibrationState = CalibrationState::Idle;
+    float _knownMass = 0.0f;
+    float _calibrationResult = 0.0f;
 };

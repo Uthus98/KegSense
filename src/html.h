@@ -13,6 +13,18 @@ const char MAIN_page[] PROGMEM = R"=====(
 <meta name="viewport"
 content="width=device-width, initial-scale=1">
 
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="KegSense">
+<meta name="mobile-web-app-capable" content="yes">
+
+<link rel="apple-touch-icon" sizes="180x180"
+      href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="152x152"
+      href="/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="120x120"
+      href="/apple-touch-icon-120.png">
+
 <title>KegSense</title>
 
 
@@ -289,6 +301,9 @@ function buildKegCard(keg)
     const card =
         document.createElement("div");
 
+    const color =
+        getColor(keg.percent);
+
     card.className = "card";
 
     if(!keg.enabled)
@@ -333,7 +348,8 @@ function buildKegCard(keg)
 
         <div
             class="percent"
-            id="percent-${keg.index}">
+            id="percent-${keg.index}"
+            style="color:${color}">
 
             ${keg.percent.toFixed(1)}%
 
@@ -344,7 +360,8 @@ function buildKegCard(keg)
 
             <div
                 class="fill"
-                id="fill-${keg.index}">
+                id="fill-${keg.index}"
+                style="width:${keg.percent}%;background:${color}">
             </div>
 
         </div>
@@ -408,42 +425,6 @@ function buildKegCard(keg)
 
         </div>
     `;
-
-
-    const color =
-        getColor(keg.percent);
-
-
-    setTimeout(() =>
-    {
-        const fill =
-            document.getElementById(
-                "fill-" + keg.index
-            );
-
-        const percent =
-            document.getElementById(
-                "percent-" + keg.index
-            );
-
-
-        if(fill)
-        {
-            fill.style.width =
-                keg.percent + "%";
-
-            fill.style.background =
-                color;
-        }
-
-
-        if(percent)
-        {
-            percent.style.color =
-                color;
-        }
-
-    },0);
 
 
     return card;

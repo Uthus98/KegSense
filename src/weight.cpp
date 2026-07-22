@@ -4,6 +4,7 @@
 #include "weight.h"
 #include "kegmanager.h"
 #include "scale.h"
+#include "settings.h"
 
 // ============================================================
 // Vekter
@@ -92,6 +93,17 @@ void weightLoop()
         if (scales[i].hasNewData())
         {
             kegs[i].updateWeight(scales[i].getWeight());
+        }
+
+        if (scales[i].getCalibrationState() == Scale::CalibrationState::Success)
+        {
+            const float calibration = scales[i].getCalibrationResult();
+
+            if (kegs[i].getCalibration() != calibration)
+            {
+                kegs[i].setCalibration(calibration);
+                saveKegSettings(static_cast<int>(i));
+            }
         }
     }
 
@@ -192,4 +204,55 @@ bool isScaleOnline(size_t index)
         return false;
 
     return scales[index].isOnline();
+}
+
+bool startScaleCalibrationTare(size_t index)
+{
+    return index < MAX_KEGS && scales[index].startCalibrationTare();
+}
+
+bool startScaleCalibration(size_t index, float knownMass)
+{
+    return index < MAX_KEGS && scales[index].startCalibration(knownMass);
+}
+
+const char* getScaleCalibrationState(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return "error";
+
+    switch (scales[index].getCalibrationState())
+    {
+        case Scale::CalibrationState::Idle: return "idle";
+        case Scale::CalibrationState::Taring: return "taring";
+        case Scale::CalibrationState::ReadyForMass: return "ready";
+        case Scale::CalibrationState::Measuring: return "measuring";
+        case Scale::CalibrationState::Success: return "success";
+        case Scale::CalibrationState::Error: return "error";
+    }
+
+    return "error";
+}
+
+float getScaleCalibrationResult(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return 0.0f;
+
+    return scales[index].getCalibrationResult();
+}
+
+void clearScaleCalibrationState(size_t index)
+{
+    if (index < MAX_KEGS)
+        scales[index].clearCalibrationState();
+}
+
+bool setScaleCalibration(size_t index, float calibration)
+{
+    if (index >= MAX_KEGS || calibration == 0.0f || !scales[index].isOnline())
+        return false;
+
+    scales[index].setCalibration(calibration);
+    return true;
 }
