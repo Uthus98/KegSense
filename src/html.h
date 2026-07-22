@@ -424,6 +424,12 @@ function buildKegCard(keg)
             ${statusText}
 
         </div>
+
+        ${keg.enabled ? `
+        <a href="/new-keg?index=${keg.index}"
+           style="display:block;margin-top:18px;padding:11px;border-radius:10px;background:#3b3b3b;color:white;text-decoration:none;font-weight:bold">
+            Nytt fat
+        </a>` : ''}
     `;
 
 

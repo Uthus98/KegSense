@@ -17,6 +17,9 @@ static void handleRoot(AsyncWebServerRequest *request);
 static void handleApi(AsyncWebServerRequest *request);
 static void handleSettings(AsyncWebServerRequest *request);
 static void handleSave(AsyncWebServerRequest *request);
+static String escapeHtml(const String& value);
+static void handleNewKeg(AsyncWebServerRequest *request);
+static void handleNewKegSave(AsyncWebServerRequest *request);
 static void handleCalibrationStatus(AsyncWebServerRequest *request);
 static void handleCalibrationTare(AsyncWebServerRequest *request);
 static void handleCalibrationApply(AsyncWebServerRequest *request);
@@ -56,6 +59,8 @@ void webBegin()
     server.on("/api", HTTP_GET, handleApi);
     server.on("/settings", HTTP_GET, handleSettings);
     server.on("/save", HTTP_GET, handleSave);
+    server.on("/new-keg", HTTP_GET, handleNewKeg);
+    server.on("/new-keg/save", HTTP_POST, handleNewKegSave);
     // Ikke legg status under /api. Enkelte ESPAsyncWebServer-versjoner
     // lar den eksisterende /api-ruten fange opp /api/calibration.
     server.on("/calibration/status", HTTP_GET, handleCalibrationStatus);
@@ -71,6 +76,27 @@ void webBegin()
 void webLoop()
 {
     // AsyncWebServer krever ingen behandling her.
+}
+
+static String escapeHtml(const String& value)
+{
+    String escaped;
+    escaped.reserve(value.length() + 8);
+
+    for (size_t i = 0; i < value.length(); i++)
+    {
+        switch (value[i])
+        {
+            case '&': escaped += "&amp;"; break;
+            case '<': escaped += "&lt;"; break;
+            case '>': escaped += "&gt;"; break;
+            case '\"': escaped += "&quot;"; break;
+            case '\'': escaped += "&#39;"; break;
+            default: escaped += value[i]; break;
+        }
+    }
+
+    return escaped;
 }
 
 
@@ -450,6 +476,98 @@ static void handleSave(AsyncWebServerRequest *request)
     }
 
     request->redirect("/settings");
+}
+
+// ============================================================
+// Nytt fat
+// ============================================================
+
+static void handleNewKeg(AsyncWebServerRequest *request)
+{
+    if (!request->hasParam("index"))
+        return request->send(400, "text/plain", "Mangler fatnummer");
+
+    const int parsed = request->getParam("index")->value().toInt();
+    if (parsed < 0 || parsed >= static_cast<int>(MAX_KEGS))
+        return request->send(400, "text/plain", "Ugyldig fatnummer");
+
+    const size_t index = static_cast<size_t>(parsed);
+    if (!isScaleEnabled(index))
+        return request->send(409, "text/plain", "Dette fatet er deaktivert");
+
+    String html;
+    html.reserve(4000);
+    html += "<!doctype html><html><head><meta charset='UTF-8'>";
+    html += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
+    html += "<title>KegSense - Nytt fat</title><style>";
+    html += "body{margin:0;background:#181818;color:#fff;font-family:Arial,sans-serif}";
+    html += ".box{max-width:560px;margin:auto;padding:24px}";
+    html += ".card{background:#252525;border-radius:18px;padding:22px}";
+    html += "label{display:block;color:#bbb;margin-top:17px}";
+    html += "input{width:100%;box-sizing:border-box;margin-top:6px;padding:12px;font-size:19px;border:1px solid #555;border-radius:9px;background:#333;color:#fff}";
+    html += "button,.back{display:block;width:100%;box-sizing:border-box;margin-top:22px;padding:14px;border:0;border-radius:10px;text-align:center;font-size:19px;font-weight:bold;text-decoration:none}";
+    html += "button{background:#00d26a;color:#fff}.back{background:#444;color:#fff}";
+    html += ".note{color:#bbb;line-height:1.45}.measure{margin:18px 0;padding:13px;border-radius:10px;background:#303030}";
+    html += "</style></head><body><main class='box'><h1>Nytt fat</h1><div class='card'>";
+    html += "<p class='note'>Kalibreringen beholdes. Sett gjerne det fylte fatet p&aring; vekten f&oslash;r du lagrer.</p>";
+    html += "<div class='measure'>N&aring;v&aelig;rende totalvekt: <strong>";
+    html += String(kegs[index].getWeight(), 2);
+    html += " kg</strong></div>";
+    html += "<form action='/new-keg/save' method='post' onsubmit=\"return confirm('Starte nytt fat med disse innstillingene?')\">";
+    html += "<input type='hidden' name='index' value='" + String(index) + "'>";
+    html += "<label>Fatnavn / &oslash;ltype</label><input name='name' maxlength='32' required value='";
+    html += escapeHtml(kegs[index].getName());
+    html += "'>";
+    html += "<label>Tomvekt for fatet (kg)</label><input type='number' name='empty' min='0' max='50' step='0.01' required value='";
+    html += String(kegs[index].getEmptyWeight(), 2);
+    html += "'>";
+    html += "<label>Faktisk fylt volum / 100 % (L)</label><input type='number' name='volume' min='0.1' max='100' step='0.1' required value='";
+    html += String(kegs[index].getVolume(), 1);
+    html += "'>";
+    html += "<button type='submit'>Bekreft nytt fat</button></form>";
+    html += "<a class='back' href='/'>Avbryt</a></div></main></body></html>";
+
+    request->send(200, "text/html; charset=utf-8", html);
+}
+
+static void handleNewKegSave(AsyncWebServerRequest *request)
+{
+    if (!request->hasParam("index", true) ||
+        !request->hasParam("name", true) ||
+        !request->hasParam("empty", true) ||
+        !request->hasParam("volume", true))
+    {
+        return request->send(400, "text/plain", "Mangler opplysninger");
+    }
+
+    const int parsed = request->getParam("index", true)->value().toInt();
+    if (parsed < 0 || parsed >= static_cast<int>(MAX_KEGS))
+        return request->send(400, "text/plain", "Ugyldig fatnummer");
+
+    const size_t index = static_cast<size_t>(parsed);
+    if (!isScaleEnabled(index))
+        return request->send(409, "text/plain", "Dette fatet er deaktivert");
+
+    String name = request->getParam("name", true)->value();
+    name.trim();
+    const float emptyWeight = request->getParam("empty", true)->value().toFloat();
+    const float volume = request->getParam("volume", true)->value().toFloat();
+
+    if (name.isEmpty() || name.length() > 32 ||
+        emptyWeight < 0.0f || emptyWeight > 50.0f ||
+        volume < 0.1f || volume > 100.0f)
+    {
+        return request->send(400, "text/plain", "Ugyldige verdier");
+    }
+
+    // Kalibreringen endres ikke ved fatbytte.
+    kegs[index].setName(name);
+    kegs[index].setEmptyWeight(emptyWeight);
+    kegs[index].setVolume(volume);
+    kegs[index].updateWeight(kegs[index].getWeight());
+    saveKegSettings(static_cast<int>(index));
+
+    request->redirect("/");
 }
 
 static bool readScaleIndex(AsyncWebServerRequest *request, size_t &index)
