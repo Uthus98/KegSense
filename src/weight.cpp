@@ -4,6 +4,7 @@
 #include "weight.h"
 #include "kegmanager.h"
 #include "scale.h"
+#include "settings.h"
 
 // ============================================================
 // Vekter
@@ -17,6 +18,8 @@ Scale scales[MAX_KEGS] =
     Scale(SCALE_CONFIGS[0]),
     Scale(SCALE_CONFIGS[1])
 };
+
+static bool tareOffsetPendingSave[MAX_KEGS] = {false};
 
 
 // ============================================================
@@ -47,7 +50,10 @@ void weightBegin()
         scales[i].setEnabled(true);
 
         // Start HX711 med kalibreringsfaktoren som tilhører fatet
-        if (scales[i].begin(kegs[i].getCalibration()))
+        const bool hasOffset = hasScaleTareOffset(static_cast<int>(i));
+        const long tareOffset = loadScaleTareOffset(static_cast<int>(i));
+
+        if (scales[i].begin(kegs[i].getCalibration(), tareOffset, hasOffset))
         {
             Serial.print("OK");
 
@@ -55,7 +61,12 @@ void weightBegin()
             Serial.print(SCALE_CONFIGS[i].doutPin);
 
             Serial.print("  SCK=");
-            Serial.println(SCALE_CONFIGS[i].sckPin);
+            Serial.print(SCALE_CONFIGS[i].sckPin);
+
+            if (!hasOffset)
+                Serial.print("  NULLPUNKT MANGLER");
+
+            Serial.println();
         }
         else
         {
@@ -92,6 +103,25 @@ void weightLoop()
         if (scales[i].hasNewData())
         {
             kegs[i].updateWeight(scales[i].getWeight());
+        }
+
+        if (scales[i].getCalibrationState() == Scale::CalibrationState::Success)
+        {
+            const float calibration = scales[i].getCalibrationResult();
+
+            if (kegs[i].getCalibration() != calibration)
+            {
+                kegs[i].setCalibration(calibration);
+                saveKegSettings(static_cast<int>(i));
+            }
+        }
+
+        if (tareOffsetPendingSave[i] &&
+            scales[i].getCalibrationState() == Scale::CalibrationState::ReadyForMass)
+        {
+            saveScaleTareOffset(static_cast<int>(i), scales[i].getTareOffset());
+            tareOffsetPendingSave[i] = false;
+            Serial.printf("Nullpunkt lagret for Fat %u\n", static_cast<unsigned>(i + 1));
         }
     }
 
@@ -192,4 +222,59 @@ bool isScaleOnline(size_t index)
         return false;
 
     return scales[index].isOnline();
+}
+
+bool startScaleCalibrationTare(size_t index)
+{
+    if (index >= MAX_KEGS || !scales[index].startCalibrationTare())
+        return false;
+
+    tareOffsetPendingSave[index] = true;
+    return true;
+}
+
+bool startScaleCalibration(size_t index, float knownMass)
+{
+    return index < MAX_KEGS && scales[index].startCalibration(knownMass);
+}
+
+const char* getScaleCalibrationState(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return "error";
+
+    switch (scales[index].getCalibrationState())
+    {
+        case Scale::CalibrationState::Idle: return "idle";
+        case Scale::CalibrationState::Taring: return "taring";
+        case Scale::CalibrationState::ReadyForMass: return "ready";
+        case Scale::CalibrationState::Measuring: return "measuring";
+        case Scale::CalibrationState::Success: return "success";
+        case Scale::CalibrationState::Error: return "error";
+    }
+
+    return "error";
+}
+
+float getScaleCalibrationResult(size_t index)
+{
+    if (index >= MAX_KEGS)
+        return 0.0f;
+
+    return scales[index].getCalibrationResult();
+}
+
+void clearScaleCalibrationState(size_t index)
+{
+    if (index < MAX_KEGS)
+        scales[index].clearCalibrationState();
+}
+
+bool setScaleCalibration(size_t index, float calibration)
+{
+    if (index >= MAX_KEGS || calibration == 0.0f || !scales[index].isOnline())
+        return false;
+
+    scales[index].setCalibration(calibration);
+    return true;
 }

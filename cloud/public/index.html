@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>KegSense Remote</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">KEGSENSE REMOTE</p><h1>Ølfatene dine</h1></div>
+      <div id="connection" class="pill">Kobler til…</div>
+    </header>
+
+    <section id="login" class="panel hidden">
+      <h2>Koble til KegSense</h2>
+      <p>Skriv inn app-nøkkelen du opprettet ved installasjonen.</p>
+      <form id="loginForm">
+        <input id="token" type="password" autocomplete="current-password" placeholder="App-nøkkel" required>
+        <button type="submit">Åpne KegSense</button>
+      </form>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="summary panel">
+        <div><span>Temperatur</span><strong id="temperature">–</strong></div>
+        <div><span>Sist oppdatert</span><strong id="updated">–</strong></div>
+      </div>
+      <div id="kegs" class="keg-grid"></div>
+
+      <section class="panel history-panel">
+        <div class="section-head">
+          <div><p class="eyebrow">FORBRUK</p><h2>Siste dager</h2></div>
+          <select id="days"><option value="14">14 dager</option><option value="30" selected>30 dager</option><option value="62">62 dager</option></select>
+        </div>
+        <div id="history"></div>
+      </section>
+
+      <button id="logout" class="secondary">Bytt app-nøkkel</button>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

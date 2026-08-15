@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kegsense-remote",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-15",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kegsense-remote",
+      "database_id": "1aba040c-08df-4cbb-8a00-7f237eaeaae3"
+    }
+  ]
+}

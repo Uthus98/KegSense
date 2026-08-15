@@ -11,7 +11,7 @@ Scale::Scale(const ScaleConfig& config)
     _enabled = config.enabled;
 }
 
-bool Scale::begin(float calibration)
+bool Scale::begin(float calibration, long tareOffset, bool hasTareOffset)
 {
     if (!_enabled)
     {
@@ -21,8 +21,9 @@ bool Scale::begin(float calibration)
 
     _cell.begin();
 
-    bool tare = true;
-    _cell.start(2000, tare);
+    // Nullpunkt skal aldri beregnes automatisk ved oppstart. Et fat kan
+    // stå på vekten under strømbrudd eller OTA-oppdatering.
+    _cell.start(2000, false);
 
     if (_cell.getTareTimeoutFlag())
     {
@@ -31,6 +32,9 @@ bool Scale::begin(float calibration)
     }
 
     _cell.setCalFactor(calibration);
+
+    if (hasTareOffset)
+        _cell.setTareOffset(tareOffset);
 
     _online = true;
     _firstSample = true;
@@ -48,6 +52,33 @@ void Scale::update()
 
     if (!_cell.update())
         return;
+
+    if (_calibrationState == CalibrationState::Taring && _cell.getTareStatus())
+    {
+        _filteredWeight = 0.0f;
+        _firstSample = true;
+        _calibrationState = CalibrationState::ReadyForMass;
+    }
+
+    if (_calibrationState == CalibrationState::Measuring)
+    {
+        if (_knownMass <= 0.0f || !_cell.refreshDataSet())
+        {
+            _calibrationState = CalibrationState::Error;
+            return;
+        }
+
+        _calibrationResult = _cell.getNewCalibration(_knownMass);
+
+        if (!isfinite(_calibrationResult) || _calibrationResult == 0.0f)
+        {
+            _calibrationState = CalibrationState::Error;
+            return;
+        }
+
+        _firstSample = true;
+        _calibrationState = CalibrationState::Success;
+    }
 
     float raw = _cell.getData();
 
@@ -113,4 +144,56 @@ bool Scale::hasNewData() const
 float Scale::getWeight() const
 {
     return _filteredWeight;
+}
+
+bool Scale::startCalibrationTare()
+{
+    if (!_enabled || !_online)
+        return false;
+
+    _calibrationState = CalibrationState::Taring;
+    _calibrationResult = 0.0f;
+    _knownMass = 0.0f;
+    _cell.tareNoDelay();
+    return true;
+}
+
+bool Scale::startCalibration(float knownMass)
+{
+    if (!_enabled || !_online ||
+        _calibrationState != CalibrationState::ReadyForMass ||
+        knownMass <= 0.0f)
+    {
+        return false;
+    }
+
+    _knownMass = knownMass;
+    _calibrationState = CalibrationState::Measuring;
+    return true;
+}
+
+Scale::CalibrationState Scale::getCalibrationState() const
+{
+    return _calibrationState;
+}
+
+float Scale::getCalibrationResult() const
+{
+    return _calibrationResult;
+}
+
+long Scale::getTareOffset()
+{
+    return _cell.getTareOffset();
+}
+
+void Scale::clearCalibrationState()
+{
+    if (_calibrationState == CalibrationState::Taring ||
+        _calibrationState == CalibrationState::Measuring)
+    {
+        return;
+    }
+
+    _calibrationState = CalibrationState::Idle;
 }

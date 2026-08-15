@@ -26,7 +26,7 @@ constexpr ScaleConfig SCALE_CONFIGS[MAX_KEGS] =
 {
     // Aktiv, DOUT, SCK
     { true,  32, 33 },   // Fat 1
-    { false, 25, 26 }    // Fat 2 (ikke tilkoblet enda)
+    { true,  16, 17 }    // Fat 2
 };
 
 //=========================
@@ -40,8 +40,23 @@ constexpr float DEFAULT_KEG_VOLUME  = 20.0f;
 constexpr float BEER_DENSITY = 0.997f;
 
 //=========================
-// WiFi
+// Temperatur i kegerator
 //=========================
 
-constexpr char WIFI_SSID[] = "Marstadvegen 36";
-constexpr char WIFI_PASSWORD[] = "juli2022";
+constexpr uint8_t TEMP_SENSOR_PIN = 13;
+
+//=========================
+// OTA-oppdatering
+//=========================
+
+// Endre disse før systemet tas i permanent bruk.
+constexpr char OTA_USERNAME[] = "admin";
+constexpr char OTA_PASSWORD[] = "kegsense";
+
+//=========================
+// KegSense Remote
+//=========================
+
+// Nøkkelen ligger i en lokal fil som ikke lastes opp til GitHub.
+#include "remote_secrets.h"
+constexpr uint32_t REMOTE_INTERVAL_MS = 60000;

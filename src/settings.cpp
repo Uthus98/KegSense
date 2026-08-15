@@ -82,3 +82,30 @@ void settingsBegin()
         loadKegSettings(static_cast<int>(i));
     }
 }
+
+bool hasScaleTareOffset(int index)
+{
+    if (index < 0 || index >= static_cast<int>(MAX_KEGS))
+        return false;
+
+    const String key = "keg" + String(index) + "_offset";
+    return prefs.isKey(key.c_str());
+}
+
+long loadScaleTareOffset(int index)
+{
+    if (!hasScaleTareOffset(index))
+        return 0;
+
+    const String key = "keg" + String(index) + "_offset";
+    return prefs.getLong(key.c_str(), 0);
+}
+
+void saveScaleTareOffset(int index, long offset)
+{
+    if (index < 0 || index >= static_cast<int>(MAX_KEGS))
+        return;
+
+    const String key = "keg" + String(index) + "_offset";
+    prefs.putLong(key.c_str(), offset);
+}
