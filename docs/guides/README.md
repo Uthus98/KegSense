@@ -6,12 +6,10 @@ Complete build, wiring and operating guides for KegSense v2 on the
 ## English
 
 - [KegSense complete project guide (PDF)](KegSense-complete-project-guide-EN.pdf)
-- [KegSense complete project guide (Word)](KegSense-complete-project-guide-EN.docx)
 
 ## Norsk
 
 - [KegSense komplett prosjektveiledning (PDF)](KegSense-komplett-veiledning-NO.pdf)
-- [KegSense komplett prosjektveiledning (Word)](KegSense-komplett-veiledning-NO.docx)
 
 The GPIO map in both guides matches the current firmware and wiring schematic:
 
