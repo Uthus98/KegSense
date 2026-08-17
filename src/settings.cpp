@@ -16,6 +16,8 @@ namespace
     String remoteDeviceId;
     String remoteUrl;
     String remoteToken;
+    String otaUsername;
+    String otaPassword;
 }
 
 void loadKegSettings(int index)
@@ -97,6 +99,8 @@ void settingsBegin()
     remoteDeviceId = prefs.getString("remote_id", REMOTE_DEVICE_ID);
     remoteUrl = prefs.getString("remote_url", REMOTE_URL);
     remoteToken = prefs.getString("remote_token", REMOTE_DEVICE_TOKEN);
+    otaUsername = prefs.getString("ota_user", "admin");
+    otaPassword = prefs.getString("ota_pass", "");
 
     for (size_t i = 0; i < MAX_KEGS; i++)
     {
@@ -172,6 +176,31 @@ void saveRemoteConfiguration(const String& deviceId, const String& url,
     prefs.putString("remote_url", remoteUrl);
     if (!token.isEmpty())
         prefs.putString("remote_token", remoteToken);
+}
+
+const String& getOtaUsername()
+{
+    return otaUsername;
+}
+
+const String& getOtaPassword()
+{
+    return otaPassword;
+}
+
+bool isOtaConfigured()
+{
+    return !otaUsername.isEmpty() && otaPassword.length() >= 8;
+}
+
+void saveOtaCredentials(const String& username, const String& password)
+{
+    otaUsername = username;
+    if (!password.isEmpty())
+        otaPassword = password;
+    prefs.putString("ota_user", otaUsername);
+    if (!password.isEmpty())
+        prefs.putString("ota_pass", otaPassword);
 }
 
 bool hasScaleTareOffset(int index)

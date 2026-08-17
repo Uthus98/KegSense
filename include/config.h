@@ -47,14 +47,6 @@ constexpr float BEER_DENSITY = 0.997f;
 constexpr uint8_t TEMP_SENSOR_PIN = 13;
 
 //=========================
-// OTA-oppdatering
-//=========================
-
-// Endre disse før systemet tas i permanent bruk.
-constexpr char OTA_USERNAME[] = "admin";
-constexpr char OTA_PASSWORD[] = "kegsense";
-
-//=========================
 // KegSense Remote
 //=========================
 

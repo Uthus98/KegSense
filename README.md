@@ -86,9 +86,11 @@ Replace `COM3` with the serial port used by your computer.
 3. Select a 2.4 GHz Wi-Fi network and enter its password.
 4. Choose one or two active kegs.
 5. Enable temperature, history and Cloudflare Remote as required.
-6. Save the configuration, reconnect to the local network and open
+6. Create a private OTA password of at least eight characters. OTA remains
+   disabled until this password has been saved.
+7. Save the configuration, reconnect to the local network and open
    `http://kegsense.local`.
-7. Open **Settings** and calibrate each enabled scale using a known mass.
+8. Open **Settings** and calibrate each enabled scale using a known mass.
 
 The dashboard also displays the device IP address, which can be used when mDNS
 is not supported by the network.
@@ -103,9 +105,9 @@ is not supported by the network.
 | `/daily-history` | Local consumption history |
 | `/update` | OTA firmware update |
 
-The development OTA credentials are `admin` / `kegsense`. Change
-`OTA_USERNAME` and `OTA_PASSWORD` in `include/config.h` before permanent or
-shared deployment.
+The OTA username and password are configured in the Wi-Fi portal. There is no
+shared default password; the update endpoint remains disabled until a password
+of at least eight characters has been stored on the device.
 
 ## Cloudflare Remote
 
@@ -157,7 +159,7 @@ KegSense/
 
 ## Security notes
 
-- Change the default OTA credentials before permanent deployment.
+- Use a unique OTA password for every installation.
 - Never commit real Wi-Fi passwords, `DEVICE_TOKEN` or `APP_TOKEN` values.
 - Keep device secrets in `include/remote_secrets.h`; the repository contains
   `include/remote_secrets.example.h` as a template.
@@ -178,3 +180,7 @@ KegSense/
 
 For detailed diagnostic procedures, use the complete project guide in
 [`docs/guides`](docs/guides/).
+
+## License
+
+KegSense is available under the [MIT License](LICENSE).

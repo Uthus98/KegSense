@@ -24,3 +24,8 @@ const String& getRemoteToken();
 bool isRemoteConfigured();
 void saveRemoteConfiguration(const String& deviceId, const String& url,
                              const String& token);
+
+const String& getOtaUsername();
+const String& getOtaPassword();
+bool isOtaConfigured();
+void saveOtaCredentials(const String& username, const String& password);

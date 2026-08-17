@@ -164,6 +164,12 @@ namespace
         page += F("<label>Remote enhetsnøkkel</label><input name='remote_token' type='password' maxlength='128' autocomplete='new-password' placeholder='");
         page += getRemoteToken().isEmpty() ? F("Lim inn enhetsnøkkel") : F("La stå tomt for å beholde lagret nøkkel");
         page += F("'><p class='note'>URL og enhetsnøkkel opprettes i Cloudflare-oppsettet. Nøkkelen vises aldri etter lagring.</p>");
+        page += F("<label>OTA-brukernavn</label><input name='ota_user' maxlength='32' value='");
+        page += escapeHtml(getOtaUsername());
+        page += F("' autocomplete='username'>");
+        page += F("<label>OTA-passord</label><input name='ota_password' type='password' minlength='8' maxlength='64' autocomplete='new-password' placeholder='");
+        page += isOtaConfigured() ? F("La stå tomt for å beholde lagret passord") : F("Minst 8 tegn - kreves for OTA");
+        page += F("'><p class='note'>OTA er deaktivert til et eget passord på minst 8 tegn er lagret.</p>");
         page += F("</fieldset>");
         page += F("<button type='submit'>Lagre og koble til</button></form>");
         if (!portalActive)
@@ -266,6 +272,21 @@ void wifiSetupRegisterRoutes(AsyncWebServer& server)
         remoteUrl.trim();
         remoteToken.trim();
 
+        String otaUser = "admin";
+        String otaPassword;
+        if (request->hasParam("ota_user", true))
+            otaUser = request->getParam("ota_user", true)->value();
+        if (request->hasParam("ota_password", true))
+            otaPassword = request->getParam("ota_password", true)->value();
+        otaUser.trim();
+        otaPassword.trim();
+        const bool otaPasswordAvailable = !otaPassword.isEmpty() || isOtaConfigured();
+        if (otaUser.isEmpty() || otaUser.length() > 32 ||
+            otaPassword.length() > 64 || !otaPasswordAvailable ||
+            (!otaPassword.isEmpty() && otaPassword.length() < 8))
+            return request->send(400, "text/plain; charset=utf-8",
+                                 "OTA krever brukernavn og et passord på minst 8 tegn");
+
         const bool tokenAvailable = !remoteToken.isEmpty() || !getRemoteToken().isEmpty();
         if (remoteEnabled &&
             (remoteId.isEmpty() || remoteId.length() > 32 ||
@@ -280,6 +301,7 @@ void wifiSetupRegisterRoutes(AsyncWebServer& server)
         wifiPreferences.putString("password", password);
         saveDeviceFeatures(kegCount, temperatureEnabled, historyEnabled, remoteEnabled);
         saveRemoteConfiguration(remoteId, remoteUrl, remoteToken);
+        saveOtaCredentials(otaUser, otaPassword);
         request->send(200, "text/html; charset=utf-8",
             buildPortalPage("Innstillingene er lagret. KegSense starter på nytt. Koble tilbake til hjemmenettverket og åpne http://kegsense.local"));
         restartPending = true;

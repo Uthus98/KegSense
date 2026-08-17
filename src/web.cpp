@@ -654,7 +654,14 @@ static void handleRestart(AsyncWebServerRequest *request)
 
 static bool authenticateUpdate(AsyncWebServerRequest *request)
 {
-    if (request->authenticate(OTA_USERNAME, OTA_PASSWORD))
+    if (!isOtaConfigured())
+    {
+        request->send(503, "text/plain; charset=utf-8",
+                      "OTA er deaktivert. Opprett OTA-passord under /wifi.");
+        return false;
+    }
+
+    if (request->authenticate(getOtaUsername().c_str(), getOtaPassword().c_str()))
         return true;
 
     request->requestAuthentication();
@@ -737,7 +744,8 @@ static void handleUpdateComplete(AsyncWebServerRequest *request)
 static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
                                size_t index, uint8_t *data, size_t len, bool final)
 {
-    if (!request->authenticate(OTA_USERNAME, OTA_PASSWORD))
+    if (!isOtaConfigured() ||
+        !request->authenticate(getOtaUsername().c_str(), getOtaPassword().c_str()))
         return;
 
     if (index == 0)
