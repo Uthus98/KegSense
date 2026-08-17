@@ -10,6 +10,7 @@
 #include "weight.h"
 #include "history.h"
 #include "temperature.h"
+#include "settings.h"
 
 namespace
 {
@@ -18,16 +19,13 @@ namespace
 
     bool configurationReady()
     {
-        return REMOTE_ENABLED &&
-               String(REMOTE_URL).startsWith("https://") &&
-               String(REMOTE_URL).indexOf("DIN-WORKER") < 0 &&
-               String(REMOTE_DEVICE_TOKEN) != "BYTT-MEG";
+        return isRemoteFeatureEnabled() && isRemoteConfigured();
     }
 
     String createPayload()
     {
         JsonDocument doc;
-        doc["deviceId"] = REMOTE_DEVICE_ID;
+        doc["deviceId"] = getRemoteDeviceId();
         doc["device"] = DEVICE_NAME;
         doc["version"] = VERSION;
         doc["uptime"] = millis() / 1000;
@@ -39,7 +37,7 @@ namespace
             doc["temperatureC"] = nullptr;
 
         JsonArray kegArray = doc["kegs"].to<JsonArray>();
-        for (size_t i = 0; i < MAX_KEGS; i++)
+        for (size_t i = 0; i < getActiveKegCount(); i++)
         {
             JsonObject keg = kegArray.add<JsonObject>();
             keg["index"] = i;
@@ -66,7 +64,7 @@ namespace
         client.setInsecure();
 
         HTTPClient http;
-        if (!http.begin(client, REMOTE_URL))
+        if (!http.begin(client, getRemoteUrl()))
         {
             Serial.println("KegSense Remote: ugyldig URL");
             return;
@@ -74,7 +72,7 @@ namespace
 
         http.setTimeout(10000);
         http.addHeader("Content-Type", "application/json");
-        http.addHeader("Authorization", "Bearer " + String(REMOTE_DEVICE_TOKEN));
+        http.addHeader("Authorization", "Bearer " + getRemoteToken());
 
         const int status = http.POST(createPayload());
         if (status >= 200 && status < 300)
@@ -91,7 +89,7 @@ namespace
 
 void remoteBegin()
 {
-    if (!REMOTE_ENABLED)
+    if (!isRemoteFeatureEnabled())
     {
         Serial.println("KegSense Remote: deaktivert");
         return;

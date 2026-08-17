@@ -6,6 +6,7 @@
 #include "history.h"
 #include "kegmanager.h"
 #include "weight.h"
+#include "settings.h"
 
 namespace
 {
@@ -182,6 +183,12 @@ namespace
 
 void historyBegin()
 {
+    if (!isHistoryFeatureEnabled())
+    {
+        Serial.println("Historikk: deaktivert i enhetsoppsett");
+        return;
+    }
+
     historyPrefs.begin("history", false);
 
     for (size_t i = 0; i < MAX_KEGS; i++)
@@ -193,6 +200,9 @@ void historyBegin()
 
 void historyLoop()
 {
+    if (!isHistoryFeatureEnabled())
+        return;
+
     if (millis() - lastSample < SAMPLE_INTERVAL_MS)
         return;
 
@@ -204,7 +214,7 @@ void historyLoop()
 
     timeReady = true;
 
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         if (!isScaleEnabled(i) || !isScaleOnline(i))
             continue;
@@ -267,7 +277,7 @@ void historyLoop()
 
 void historyResetKeg(size_t index)
 {
-    if (index >= MAX_KEGS)
+    if (!isHistoryFeatureEnabled() || index >= getActiveKegCount())
         return;
 
     HistoryState &state = states[index];
@@ -286,7 +296,8 @@ void historyResetKeg(size_t index)
 
 float getConsumptionToday(size_t index)
 {
-    if (index >= MAX_KEGS || !states[index].initialized || states[index].suspended)
+    if (!isHistoryFeatureEnabled() || index >= getActiveKegCount() ||
+        !states[index].initialized || states[index].suspended)
         return 0.0f;
 
     return consumptionFor(states[index], kegs[index].getLiters());
@@ -294,7 +305,7 @@ float getConsumptionToday(size_t index)
 
 bool isHistoryTimeReady()
 {
-    return timeReady;
+    return isHistoryFeatureEnabled() && timeReady;
 }
 
 size_t getDailyHistoryCount(size_t index)

@@ -230,9 +230,11 @@ body{
 
 &nbsp; • &nbsp;
 
-🌡️ <span id="temperature">--</span> °C
+<span id="local-ip">...</span>
 
 &nbsp; • &nbsp;
+
+<span id="temperature-status">🌡️ <span id="temperature">--</span> °C &nbsp; • &nbsp;</span>
 
 ⏱ <span id="uptime">...</span>
 
@@ -248,6 +250,7 @@ class="container">
 
 
 <a
+id="history-button"
 class="button"
 href="/daily-history">
 
@@ -498,6 +501,10 @@ async function update()
         ).innerHTML =
             data.wifiRSSI;
 
+        document.getElementById(
+            "local-ip"
+        ).innerHTML = data.localIP;
+
 
         document.getElementById(
             "temperature"
@@ -505,6 +512,14 @@ async function update()
             data.temperatureValid
                 ? data.temperatureC.toFixed(1)
                 : "--";
+
+        document.getElementById(
+            "temperature-status"
+        ).style.display = data.temperatureEnabled ? "inline" : "none";
+
+        document.getElementById(
+            "history-button"
+        ).style.display = data.historyEnabled ? "block" : "none";
 
 
         document.getElementById(

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 constexpr char DEVICE_NAME[] = "KegSense";
+constexpr char DEVICE_HOSTNAME[] = "kegsense";
 constexpr char VERSION[] = "2.0.0-alpha";
 
 //=========================
@@ -57,6 +58,14 @@ constexpr char OTA_PASSWORD[] = "kegsense";
 // KegSense Remote
 //=========================
 
-// Nøkkelen ligger i en lokal fil som ikke lastes opp til GitHub.
+// Nøkkelen ligger i en lokal fil som ikke lastes opp til GitHub. Firmware kan
+// fortsatt bygges uten filen; Remote blir da utilgjengelig til den er satt opp.
+#if __has_include("remote_secrets.h")
 #include "remote_secrets.h"
+#else
+constexpr bool REMOTE_ENABLED = false;
+constexpr char REMOTE_DEVICE_ID[] = "kegsense";
+constexpr char REMOTE_URL[] = "";
+constexpr char REMOTE_DEVICE_TOKEN[] = "";
+#endif
 constexpr uint32_t REMOTE_INTERVAL_MS = 60000;

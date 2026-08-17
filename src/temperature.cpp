@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "temperature.h"
+#include "settings.h"
 
 namespace
 {
@@ -30,6 +31,12 @@ namespace
 
 void temperatureBegin()
 {
+    if (!isTemperatureFeatureEnabled())
+    {
+        Serial.println("Temperatur: deaktivert i enhetsoppsett");
+        return;
+    }
+
     sensors.begin();
     sensors.setResolution(12);
     sensors.setWaitForConversion(false);
@@ -42,6 +49,9 @@ void temperatureBegin()
 
 void temperatureLoop()
 {
+    if (!isTemperatureFeatureEnabled())
+        return;
+
     const uint32_t now = millis();
 
     if (conversionPending && now - conversionStartedAt >= CONVERSION_TIME_MS)
@@ -67,7 +77,7 @@ void temperatureLoop()
 
 bool isTemperatureValid()
 {
-    return temperatureValid;
+    return isTemperatureFeatureEnabled() && temperatureValid;
 }
 
 float getTemperatureC()

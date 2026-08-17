@@ -40,7 +40,7 @@ void weightBegin()
         Serial.print(" - ");
 
         // Vekten er deaktivert i config.h
-        if (!SCALE_CONFIGS[i].enabled)
+        if (!isScaleEnabled(i))
         {
             Serial.println("DEAKTIVERT");
             continue;
@@ -91,7 +91,7 @@ void weightLoop()
 
     for (size_t i = 0; i < MAX_KEGS; i++)
     {
-        if (!SCALE_CONFIGS[i].enabled)
+        if (!isScaleEnabled(i))
             continue;
 
         if (!scales[i].isOnline())
@@ -149,7 +149,7 @@ void weightLoop()
         Serial.print(")");
 
         // Deaktivert i config.h
-        if (!SCALE_CONFIGS[i].enabled)
+        if (!isScaleEnabled(i))
         {
             Serial.println("  DEAKTIVERT");
             continue;
@@ -213,12 +213,12 @@ bool isScaleEnabled(size_t index)
     if (index >= MAX_KEGS)
         return false;
 
-    return SCALE_CONFIGS[index].enabled;
+    return index < getActiveKegCount() && SCALE_CONFIGS[index].enabled;
 }
 
 bool isScaleOnline(size_t index)
 {
-    if (index >= MAX_KEGS)
+    if (!isScaleEnabled(index))
         return false;
 
     return scales[index].isOnline();
@@ -226,7 +226,7 @@ bool isScaleOnline(size_t index)
 
 bool startScaleCalibrationTare(size_t index)
 {
-    if (index >= MAX_KEGS || !scales[index].startCalibrationTare())
+    if (!isScaleEnabled(index) || !scales[index].startCalibrationTare())
         return false;
 
     tareOffsetPendingSave[index] = true;
@@ -235,7 +235,7 @@ bool startScaleCalibrationTare(size_t index)
 
 bool startScaleCalibration(size_t index, float knownMass)
 {
-    return index < MAX_KEGS && scales[index].startCalibration(knownMass);
+    return isScaleEnabled(index) && scales[index].startCalibration(knownMass);
 }
 
 const char* getScaleCalibrationState(size_t index)
@@ -272,7 +272,7 @@ void clearScaleCalibrationState(size_t index)
 
 bool setScaleCalibration(size_t index, float calibration)
 {
-    if (index >= MAX_KEGS || calibration == 0.0f || !scales[index].isOnline())
+    if (!isScaleEnabled(index) || calibration == 0.0f || !scales[index].isOnline())
         return false;
 
     scales[index].setCalibration(calibration);

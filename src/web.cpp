@@ -39,6 +39,7 @@ static void handleCalibrationClear(AsyncWebServerRequest *request);
 static bool restartAfterUpdate = false;
 static uint32_t restartRequestedAt = 0;
 static bool updateFileAccepted = false;
+static bool updateSucceeded = false;
 
 void webBegin()
 {
@@ -130,8 +131,11 @@ static void handleApi(AsyncWebServerRequest *request)
     doc["device"] = DEVICE_NAME;
     doc["version"] = VERSION;
     doc["wifiRSSI"] = WiFi.RSSI();
+    doc["localIP"] = WiFi.localIP().toString();
     doc["uptime"] = millis() / 1000;
     doc["timeReady"] = isHistoryTimeReady();
+    doc["temperatureEnabled"] = isTemperatureFeatureEnabled();
+    doc["historyEnabled"] = isHistoryFeatureEnabled();
     doc["temperatureValid"] = isTemperatureValid();
     if (isTemperatureValid())
         doc["temperatureC"] = getTemperatureC();
@@ -140,7 +144,7 @@ static void handleApi(AsyncWebServerRequest *request)
 
     JsonArray kegArray = doc["kegs"].to<JsonArray>();
 
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         JsonObject keg = kegArray.add<JsonObject>();
 
@@ -175,6 +179,9 @@ static void handleApi(AsyncWebServerRequest *request)
 
 static void handleHistoryPage(AsyncWebServerRequest *request)
 {
+    if (!isHistoryFeatureEnabled())
+        return request->send(404, "text/plain; charset=utf-8", "Historikk er deaktivert i enhetsoppsettet");
+
     static const char page[] PROGMEM = R"HISTORY(
 <!doctype html><html><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -226,6 +233,9 @@ loadHistory(30);
 
 static void handleHistoryData(AsyncWebServerRequest *request)
 {
+    if (!isHistoryFeatureEnabled())
+        return request->send(404, "application/json", "{\"message\":\"Historikk er deaktivert\"}");
+
     int days = 30;
     if (request->hasParam("days"))
         days = constrain(request->getParam("days")->value().toInt(), 1, 62);
@@ -233,7 +243,7 @@ static void handleHistoryData(AsyncWebServerRequest *request)
     JsonDocument doc;
     JsonArray kegArray = doc["kegs"].to<JsonArray>();
 
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         JsonObject keg = kegArray.add<JsonObject>();
         keg["index"] = i;
@@ -375,7 +385,7 @@ static void handleSettings(AsyncWebServerRequest *request)
 
     html += "<form action='/save' method='get'>";
 
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         bool enabled = isScaleEnabled(i);
 
@@ -585,7 +595,7 @@ refreshCalibration();
 
 static void handleSave(AsyncWebServerRequest *request)
 {
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         String prefix = "keg" + String(i) + "_";
 
@@ -709,7 +719,7 @@ static void handleUpdateComplete(AsyncWebServerRequest *request)
     if (!authenticateUpdate(request))
         return;
 
-    if (!updateFileAccepted || Update.hasError())
+    if (!updateSucceeded)
     {
         updateFileAccepted = false;
         return request->send(400, "text/plain; charset=utf-8",
@@ -721,6 +731,7 @@ static void handleUpdateComplete(AsyncWebServerRequest *request)
     restartAfterUpdate = true;
     restartRequestedAt = millis();
     updateFileAccepted = false;
+    updateSucceeded = false;
 }
 
 static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
@@ -731,6 +742,7 @@ static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
 
     if (index == 0)
     {
+        updateSucceeded = false;
         updateFileAccepted = filename.endsWith(".bin") || filename.endsWith(".BIN");
 
         if (!updateFileAccepted || !Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH))
@@ -760,6 +772,7 @@ static void handleUpdateUpload(AsyncWebServerRequest *request, String filename,
         }
         else
         {
+            updateSucceeded = true;
             Serial.printf("OTA ferdig: %u bytes\n", static_cast<unsigned>(index + len));
         }
     }
@@ -885,7 +898,7 @@ static void handleCalibrationStatus(AsyncWebServerRequest *request)
     JsonDocument doc;
     JsonArray scales = doc["scales"].to<JsonArray>();
 
-    for (size_t i = 0; i < MAX_KEGS; i++)
+    for (size_t i = 0; i < getActiveKegCount(); i++)
     {
         JsonObject scale = scales.add<JsonObject>();
         scale["index"] = i;

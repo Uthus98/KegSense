@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 #include <Preferences.h>
 
 #include "wifi_setup.h"
+#include "config.h"
+#include "settings.h"
 
 namespace
 {
@@ -15,6 +18,20 @@ namespace
     bool portalActive = false;
     bool restartPending = false;
     uint32_t restartAt = 0;
+
+    void startMdns()
+    {
+        if (!MDNS.begin(DEVICE_HOSTNAME))
+        {
+            Serial.println("mDNS kunne ikke startes");
+            return;
+        }
+
+        MDNS.addService("http", "tcp", 80);
+        Serial.print("Lokal adresse: http://");
+        Serial.print(DEVICE_HOSTNAME);
+        Serial.println(".local");
+    }
 
     String escapeHtml(const String& value)
     {
@@ -62,6 +79,7 @@ namespace
         page += F("*{box-sizing:border-box}body{margin:0;background:#181818;color:#fff;font-family:Arial,sans-serif}");
         page += F("main{max-width:600px;margin:auto;padding:24px}.card{background:#252525;border-radius:18px;padding:22px}");
         page += F("label{display:block;color:#bbb;margin-top:17px}select,input{width:100%;padding:13px;margin-top:6px;font-size:18px;border:1px solid #555;border-radius:9px;background:#333;color:#fff}");
+        page += F("fieldset{border:1px solid #555;border-radius:12px;margin:22px 0 0;padding:5px 16px 17px}legend{padding:0 8px;font-weight:bold}.toggle{display:flex;align-items:center;gap:11px;color:#fff}.toggle input{width:auto;margin:0}.unavailable{opacity:.55}");
         page += F("button,a{display:block;width:100%;padding:14px;margin-top:20px;border:0;border-radius:10px;text-align:center;font-size:19px;font-weight:bold;text-decoration:none}");
         page += F("button{background:#00d26a;color:#fff}a{background:#444;color:#fff}.note{color:#bbb;line-height:1.5}.message{padding:12px;border-radius:9px;background:#274b39}");
         page += F("</style></head><body><main><h1>KegSense WiFi</h1><div class='card'>");
@@ -73,13 +91,23 @@ namespace
             page += F("</div>");
         }
 
-        page += F("<p class='note'>Velg nettverket KegSense skal bruke. Opplysningene lagres i ESP32 og beholdes etter omstart.</p>");
+        page += F("<p class='note'>Velg nettverk og funksjonene denne KegSense-enheten skal bruke. Valgene lagres og kan endres senere.</p>");
         page += F("<form method='post' action='/wifi/save'><label>WiFi-nettverk</label><select name='ssid' required>");
 
+        const String savedSsid = wifiPreferences.getString("ssid", "");
         const int count = WiFi.scanNetworks();
         if (count <= 0)
         {
-            page += F("<option value=''>Ingen nettverk funnet</option>");
+            if (!savedSsid.isEmpty())
+            {
+                page += F("<option selected value='");
+                page += escapeHtml(savedSsid);
+                page += F("'>Lagret nettverk: ");
+                page += escapeHtml(savedSsid);
+                page += F("</option>");
+            }
+            else
+                page += F("<option value=''>Ingen nettverk funnet</option>");
         }
         else
         {
@@ -90,7 +118,10 @@ namespace
                     continue;
                 page += F("<option value='");
                 page += escapeHtml(ssid);
-                page += F("'>");
+                page += F("'");
+                if (ssid == savedSsid)
+                    page += F(" selected");
+                page += F(">");
                 page += escapeHtml(ssid);
                 page += " (" + String(WiFi.RSSI(i)) + " dBm)";
                 page += F("</option>");
@@ -98,7 +129,42 @@ namespace
         }
 
         WiFi.scanDelete();
-        page += F("</select><label>Passord</label><input name='password' type='password' autocomplete='current-password'>");
+        page += F("</select><label>Passord</label><input name='password' type='password' autocomplete='current-password' placeholder='");
+        page += savedSsid.isEmpty() ? F("WiFi-passord") : F("La stå tomt for å beholde lagret passord");
+        page += F("'>");
+
+        page += F("<fieldset><legend>Enhetsoppsett</legend><label>Antall fat</label><select name='keg_count'>");
+        for (size_t count = 1; count <= MAX_KEGS; count++)
+        {
+            page += F("<option value='");
+            page += String(count);
+            page += F("'");
+            if (count == getActiveKegCount())
+                page += F(" selected");
+            page += F(">");
+            page += String(count);
+            page += F(" fat</option>");
+        }
+        page += F("</select>");
+        page += F("<label class='toggle'><input type='checkbox' name='feature_temp'");
+        if (isTemperatureFeatureEnabled()) page += F(" checked");
+        page += F("> Temperaturmåling</label>");
+        page += F("<label class='toggle'><input type='checkbox' name='feature_history'");
+        if (isHistoryFeatureEnabled()) page += F(" checked");
+        page += F("> Forbrukshistorikk</label>");
+        page += F("<label class='toggle'><input type='checkbox' name='feature_remote'");
+        if (isRemoteFeatureEnabled()) page += F(" checked");
+        page += F("> Cloudflare Remote</label>");
+        page += F("<label>Remote enhets-ID</label><input name='remote_id' maxlength='32' value='");
+        page += escapeHtml(getRemoteDeviceId());
+        page += F("' placeholder='for eksempel kegsense-hjemme'>");
+        page += F("<label>Cloudflare Worker-URL</label><input name='remote_url' type='url' maxlength='200' value='");
+        page += escapeHtml(getRemoteUrl());
+        page += F("' placeholder='https://din-worker.workers.dev/api/telemetry'>");
+        page += F("<label>Remote enhetsnøkkel</label><input name='remote_token' type='password' maxlength='128' autocomplete='new-password' placeholder='");
+        page += getRemoteToken().isEmpty() ? F("Lim inn enhetsnøkkel") : F("La stå tomt for å beholde lagret nøkkel");
+        page += F("'><p class='note'>URL og enhetsnøkkel opprettes i Cloudflare-oppsettet. Nøkkelen vises aldri etter lagring.</p>");
+        page += F("</fieldset>");
         page += F("<button type='submit'>Lagre og koble til</button></form>");
         if (!portalActive)
             page += F("<a href='/settings'>Tilbake til innstillinger</a>");
@@ -128,6 +194,7 @@ void wifiSetupBegin()
     Serial.print("Kobler til WiFi: ");
     Serial.println(ssid);
     WiFi.mode(WIFI_STA);
+    WiFi.setHostname(DEVICE_HOSTNAME);
     WiFi.begin(ssid.c_str(), password.c_str());
 
     const uint32_t startedAt = millis();
@@ -142,6 +209,7 @@ void wifiSetupBegin()
         Serial.println();
         Serial.print("IP: ");
         Serial.println(WiFi.localIP());
+        startMdns();
         return;
     }
 
@@ -171,10 +239,49 @@ void wifiSetupRegisterRoutes(AsyncWebServer& server)
         if (ssid.isEmpty() || ssid.length() > 32 || password.length() > 63)
             return request->send(400, "text/plain; charset=utf-8", "Ugyldig nettverksnavn eller passord");
 
+        const String savedSsid = wifiPreferences.getString("ssid", "");
+        if (password.isEmpty() && ssid == savedSsid)
+            password = wifiPreferences.getString("password", "");
+
+        size_t kegCount = MAX_KEGS;
+        if (request->hasParam("keg_count", true))
+            kegCount = static_cast<size_t>(request->getParam("keg_count", true)->value().toInt());
+        if (kegCount < 1 || kegCount > MAX_KEGS)
+            return request->send(400, "text/plain; charset=utf-8", "Ugyldig antall fat");
+
+        const bool temperatureEnabled = request->hasParam("feature_temp", true);
+        const bool historyEnabled = request->hasParam("feature_history", true);
+        const bool remoteEnabled = request->hasParam("feature_remote", true);
+
+        String remoteId;
+        String remoteUrl;
+        String remoteToken;
+        if (request->hasParam("remote_id", true))
+            remoteId = request->getParam("remote_id", true)->value();
+        if (request->hasParam("remote_url", true))
+            remoteUrl = request->getParam("remote_url", true)->value();
+        if (request->hasParam("remote_token", true))
+            remoteToken = request->getParam("remote_token", true)->value();
+        remoteId.trim();
+        remoteUrl.trim();
+        remoteToken.trim();
+
+        const bool tokenAvailable = !remoteToken.isEmpty() || !getRemoteToken().isEmpty();
+        if (remoteEnabled &&
+            (remoteId.isEmpty() || remoteId.length() > 32 ||
+             !remoteUrl.startsWith("https://") || remoteUrl.length() > 200 ||
+             !tokenAvailable || remoteToken.length() > 128))
+        {
+            return request->send(400, "text/plain; charset=utf-8",
+                                 "Remote krever gyldig enhets-ID, HTTPS Worker-URL og enhetsnøkkel");
+        }
+
         wifiPreferences.putString("ssid", ssid);
         wifiPreferences.putString("password", password);
+        saveDeviceFeatures(kegCount, temperatureEnabled, historyEnabled, remoteEnabled);
+        saveRemoteConfiguration(remoteId, remoteUrl, remoteToken);
         request->send(200, "text/html; charset=utf-8",
-            buildPortalPage("Innstillingene er lagret. KegSense starter på nytt..."));
+            buildPortalPage("Innstillingene er lagret. KegSense starter på nytt. Koble tilbake til hjemmenettverket og åpne http://kegsense.local"));
         restartPending = true;
         restartAt = millis();
     });
@@ -208,4 +315,3 @@ bool wifiSetupIsPortalActive()
 {
     return portalActive;
 }
-

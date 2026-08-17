@@ -13,7 +13,7 @@ Cloudflare Worker + D1 + installerbar PWA. ESP32 sender kun utgående HTTPS-data
    - `npx wrangler secret put APP_TOKEN`
 6. Opprett tabellene: `npm run db:remote`.
 7. Publiser appen: `npm run deploy`.
-8. Lim Worker-adressen og `DEVICE_TOKEN` inn i `include/config.h`, og sett `REMOTE_ENABLED = true`.
-9. Bygg og installer ny OTA-firmware.
+8. Åpne `http://kegsense.local/wifi` og aktiver Cloudflare Remote.
+9. Legg inn en valgfri enhets-ID, Worker-adressen med `/api/telemetry` og samme `DEVICE_TOKEN` som ble lagret i Cloudflare.
 
 `APP_TOKEN` brukes bare i mobilappen. `DEVICE_TOKEN` skal bare ligge på ESP32 og som Worker-secret.

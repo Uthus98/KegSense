@@ -7,6 +7,17 @@
 
 Preferences prefs;
 
+namespace
+{
+    size_t activeKegCount = MAX_KEGS;
+    bool temperatureFeatureEnabled = true;
+    bool historyFeatureEnabled = true;
+    bool remoteFeatureEnabled = true;
+    String remoteDeviceId;
+    String remoteUrl;
+    String remoteToken;
+}
+
 void loadKegSettings(int index)
 {
     if (index < 0 || index >= static_cast<int>(MAX_KEGS))
@@ -77,10 +88,90 @@ void settingsBegin()
 {
     prefs.begin("kegsense", false);
 
+    activeKegCount = constrain(
+        static_cast<size_t>(prefs.getUChar("keg_count", MAX_KEGS)),
+        static_cast<size_t>(1), MAX_KEGS);
+    temperatureFeatureEnabled = prefs.getBool("feature_temp", true);
+    historyFeatureEnabled = prefs.getBool("feature_history", true);
+    remoteFeatureEnabled = prefs.getBool("feature_remote", true);
+    remoteDeviceId = prefs.getString("remote_id", REMOTE_DEVICE_ID);
+    remoteUrl = prefs.getString("remote_url", REMOTE_URL);
+    remoteToken = prefs.getString("remote_token", REMOTE_DEVICE_TOKEN);
+
     for (size_t i = 0; i < MAX_KEGS; i++)
     {
         loadKegSettings(static_cast<int>(i));
     }
+}
+
+size_t getActiveKegCount()
+{
+    return activeKegCount;
+}
+
+bool isTemperatureFeatureEnabled()
+{
+    return temperatureFeatureEnabled;
+}
+
+bool isHistoryFeatureEnabled()
+{
+    return historyFeatureEnabled;
+}
+
+bool isRemoteFeatureEnabled()
+{
+    return remoteFeatureEnabled;
+}
+
+void saveDeviceFeatures(size_t kegCount, bool temperatureEnabled,
+                        bool historyEnabled, bool remoteEnabled)
+{
+    activeKegCount = constrain(kegCount, static_cast<size_t>(1), MAX_KEGS);
+    temperatureFeatureEnabled = temperatureEnabled;
+    historyFeatureEnabled = historyEnabled;
+    remoteFeatureEnabled = remoteEnabled;
+
+    prefs.putUChar("keg_count", static_cast<uint8_t>(activeKegCount));
+    prefs.putBool("feature_temp", temperatureFeatureEnabled);
+    prefs.putBool("feature_history", historyFeatureEnabled);
+    prefs.putBool("feature_remote", remoteFeatureEnabled);
+}
+
+const String& getRemoteDeviceId()
+{
+    return remoteDeviceId;
+}
+
+const String& getRemoteUrl()
+{
+    return remoteUrl;
+}
+
+const String& getRemoteToken()
+{
+    return remoteToken;
+}
+
+bool isRemoteConfigured()
+{
+    return !remoteDeviceId.isEmpty() && remoteUrl.startsWith("https://") &&
+           !remoteToken.isEmpty() && remoteToken != "BYTT-MEG" &&
+           remoteUrl.indexOf("DIN-WORKER") < 0;
+}
+
+void saveRemoteConfiguration(const String& deviceId, const String& url,
+                             const String& token)
+{
+    remoteDeviceId = deviceId;
+    remoteUrl = url;
+    if (!token.isEmpty())
+        remoteToken = token;
+
+    prefs.putString("remote_id", remoteDeviceId);
+    prefs.putString("remote_url", remoteUrl);
+    if (!token.isEmpty())
+        prefs.putString("remote_token", remoteToken);
 }
 
 bool hasScaleTareOffset(int index)
