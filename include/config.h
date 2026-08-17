@@ -1,37 +1,71 @@
 #pragma once
 
-#define DEVICE_NAME "KegSense"
-#define VERSION     "1.1.0"
+#include <Arduino.h>
+
+constexpr char DEVICE_NAME[] = "KegSense";
+constexpr char DEVICE_HOSTNAME[] = "kegsense";
+constexpr char VERSION[] = "2.0.0-alpha";
 
 //=========================
-// HX711
+// Antall fat
 //=========================
 
-constexpr uint8_t HX711_DOUT = 32;
-constexpr uint8_t HX711_SCK  = 33;
+constexpr size_t MAX_KEGS = 2;
 
 //=========================
-// Kalibrering
+// Konfigurasjon av vekter
 //=========================
 
-constexpr float CALIBRATION_FACTOR = 23786.25f;
+struct ScaleConfig
+{
+    bool enabled;
+    uint8_t doutPin;
+    uint8_t sckPin;
+};
+
+constexpr ScaleConfig SCALE_CONFIGS[MAX_KEGS] =
+{
+    // Aktiv, DOUT, SCK
+    { true,  32, 33 },   // Fat 1
+    { true,  16, 17 }    // Fat 2
+};
 
 //=========================
-// Fat
+// Standardverdier
 //=========================
 
-// Tomvekt Corneliusfat
-constexpr float KEG_EMPTY = 4.90f;
+constexpr float DEFAULT_CALIBRATION = 23786.25f;
+constexpr float DEFAULT_KEG_EMPTY   = 4.90f;
+constexpr float DEFAULT_KEG_VOLUME  = 20.0f;
 
-// Liter når fullt
-constexpr float KEG_VOLUME = 20.0f;
-
-// Tetthet øl
 constexpr float BEER_DENSITY = 0.997f;
 
 //=========================
-// WiFi
+// Temperatur i kegerator
 //=========================
 
-constexpr char WIFI_SSID[] = "Marstadvegen 36";
-constexpr char WIFI_PASSWORD[] = "juli2022";
+constexpr uint8_t TEMP_SENSOR_PIN = 13;
+
+//=========================
+// OTA-oppdatering
+//=========================
+
+// Endre disse før systemet tas i permanent bruk.
+constexpr char OTA_USERNAME[] = "admin";
+constexpr char OTA_PASSWORD[] = "kegsense";
+
+//=========================
+// KegSense Remote
+//=========================
+
+// Nøkkelen ligger i en lokal fil som ikke lastes opp til GitHub. Firmware kan
+// fortsatt bygges uten filen; Remote blir da utilgjengelig til den er satt opp.
+#if __has_include("remote_secrets.h")
+#include "remote_secrets.h"
+#else
+constexpr bool REMOTE_ENABLED = false;
+constexpr char REMOTE_DEVICE_ID[] = "kegsense";
+constexpr char REMOTE_URL[] = "";
+constexpr char REMOTE_DEVICE_TOKEN[] = "";
+#endif
+constexpr uint32_t REMOTE_INTERVAL_MS = 60000;

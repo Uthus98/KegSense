@@ -4,14 +4,23 @@
 
 void settingsBegin();
 
-String getKegName();
-void setKegName(String name);
+void loadKegSettings(int index);
+void saveKegSettings(int index);
 
-float getKegEmpty();
-void setKegEmpty(float value);
+bool hasScaleTareOffset(int index);
+long loadScaleTareOffset(int index);
+void saveScaleTareOffset(int index, long offset);
 
-float getKegVolume();
-void setKegVolume(float value);
+size_t getActiveKegCount();
+bool isTemperatureFeatureEnabled();
+bool isHistoryFeatureEnabled();
+bool isRemoteFeatureEnabled();
+void saveDeviceFeatures(size_t kegCount, bool temperatureEnabled,
+                        bool historyEnabled, bool remoteEnabled);
 
-float getCalFactor();
-void setCalFactor(float value);
+const String& getRemoteDeviceId();
+const String& getRemoteUrl();
+const String& getRemoteToken();
+bool isRemoteConfigured();
+void saveRemoteConfiguration(const String& deviceId, const String& url,
+                             const String& token);

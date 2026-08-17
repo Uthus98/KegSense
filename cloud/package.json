@@ -1,0 +1,14 @@
+{
+  "name": "kegsense-remote",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute kegsense-remote --local --file=schema.sql",
+    "db:remote": "wrangler d1 execute kegsense-remote --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "@napi-rs/keyring": "^1.3.0",
+    "wrangler": "^4.0.0"
+  }
+}
